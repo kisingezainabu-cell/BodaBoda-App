@@ -1,4 +1,5 @@
 import React from 'react';
+import heroImg from '../assets/boda1.jpeg';
 
 const Home = ({ onNavigate }) => {
   return (
@@ -9,51 +10,60 @@ const Home = ({ onNavigate }) => {
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-emerald-50/50 blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 rounded-full bg-blue-50/50 blur-3xl pointer-events-none"></div>
 
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 relative z-10">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tight leading-tight mb-6">
-              Fast, Reliable Boda Rides in <span className="text-emerald-600">Dodoma</span>
-            </h1>
-            <p className="text-lg md:text-xl text-slate-600 mb-8 max-w-2xl leading-relaxed">
-              Connect with verified riders instantly. Whether you're commuting to work, heading to the market, or sending a package, BodaConnect gets you there safely.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button 
-                onClick={() => onNavigate('request')}
-                className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-lg shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                Request a Ride
-              </button>
-              <button 
-                onClick={() => onNavigate('login')}
-                className="px-8 py-4 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-lg font-semibold text-lg shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                Rider Login
-              </button>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            {/* Left Content */}
+            <div className="max-w-3xl">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tight leading-tight mb-6">
+                Fast, Reliable Boda Rides in <span className="text-emerald-600">Dodoma</span>
+              </h1>
+              <p className="text-lg md:text-xl text-slate-600 mb-8 max-w-2xl leading-relaxed">
+                Connect with verified riders instantly. Whether you're commuting to work, heading to the market, or sending a package, BodaConnect gets you there safely.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button 
+                  onClick={() => onNavigate('request')}
+                  className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-lg shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                  Request a Ride
+                </button>
+                <button 
+                  onClick={() => onNavigate('login')}
+                  className="px-8 py-4 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-lg font-semibold text-lg shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  Rider Login
+                </button>
+              </div>
+              
+              {/* Trust Indicators */}
+              <div className="mt-12 flex flex-wrap items-center gap-6 text-sm font-medium text-slate-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  Verified Riders
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  Affordable Pricing
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  Quick Response
+                </div>
+              </div>
             </div>
-            
-            {/* Trust Indicators */}
-            <div className="mt-12 flex flex-wrap items-center gap-6 text-sm font-medium text-slate-500">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                Verified Riders
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                Affordable Pricing
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                Quick Response
-              </div>
+
+            {/* Right Image */}
+            <div className="hidden md:block relative">
+              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-100 to-blue-50 rounded-3xl transform rotate-3 scale-105 -z-10"></div>
+              <img src={heroImg} alt="Boda Boda Rider" className="w-full h-auto object-cover rounded-3xl shadow-xl border border-white/50" />
             </div>
           </div>
         </div>

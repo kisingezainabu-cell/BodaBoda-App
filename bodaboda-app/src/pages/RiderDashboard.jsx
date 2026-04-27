@@ -125,12 +125,17 @@ const RiderDashboard = ({ riderName, onNavigate }) => {
             )}
 
             {/* Map Placeholder Area */}
-            <div className="bg-slate-800 rounded-2xl h-64 overflow-hidden relative shadow-inner">
-               <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'radial-gradient(#4ade80 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
-               <div className="absolute inset-0 flex items-center justify-center flex-col">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 mb-2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
-                  <p className="text-slate-400 text-sm font-medium">Live Map Area</p>
-               </div>
+            <div className="bg-slate-200 rounded-2xl h-64 overflow-hidden relative shadow-inner border border-slate-300">
+               <iframe 
+                 src="https://www.openstreetmap.org/export/embed.html?bbox=35.65,-6.22,35.82,-6.12&layer=mapnik" 
+                 width="100%" 
+                 height="100%" 
+                 style={{ border: 0 }} 
+                 allowFullScreen="" 
+                 loading="lazy" 
+                 className="absolute inset-0 grayscale contrast-125 opacity-80"
+                 title="Dodoma Map"
+               ></iframe>
             </div>
 
           </div>

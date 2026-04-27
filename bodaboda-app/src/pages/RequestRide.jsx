@@ -180,18 +180,21 @@ const RequestRide = () => {
           </div>
         </div>
 
-        {/* Right Side: Map Placeholder */}
-        <div className="w-full md:w-1/2 h-64 md:h-auto min-h-[400px] bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-300">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-30 mix-blend-multiply"></div>
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/10 to-slate-900/10"></div>
+        {/* Right Side: Map Embedded */}
+        <div className="w-full md:w-1/2 h-64 md:h-auto min-h-[400px] bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-300 shadow-inner">
+          <iframe 
+            src="https://www.openstreetmap.org/export/embed.html?bbox=35.65,-6.22,35.82,-6.12&layer=mapnik" 
+            width="100%" 
+            height="100%" 
+            style={{ border: 0 }} 
+            allowFullScreen="" 
+            loading="lazy" 
+            className="absolute inset-0 grayscale contrast-125 opacity-80"
+            title="Dodoma Map"
+          ></iframe>
           
-          {/* Map UI Elements */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            {/* Fake route line */}
-            <svg width="100%" height="100%" className="absolute inset-0 pointer-events-none opacity-50">
-               <path d="M100,100 C150,200 250,150 300,300" fill="none" stroke="#059669" strokeWidth="4" strokeDasharray="8 8" />
-            </svg>
-            
+          {/* Overlay elements for realism */}
+          <div className="absolute inset-0 pointer-events-none">
             {formData.pickup && (
               <div className="absolute top-[20%] left-[30%] flex flex-col items-center">
                 <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded shadow-lg mb-1 whitespace-nowrap">{formData.pickup}</div>
@@ -204,13 +207,6 @@ const RequestRide = () => {
                  <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded shadow-lg mb-1 whitespace-nowrap">{formData.destination}</div>
                  <div className="w-4 h-4 bg-orange-500 rounded-sm shadow-md"></div>
                </div>
-            )}
-
-            {(!formData.pickup && !formData.destination) && (
-              <div className="text-slate-500 font-medium flex flex-col items-center gap-2 bg-white/80 backdrop-blur px-4 py-2 rounded-lg">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                Enter locations to see route
-              </div>
             )}
           </div>
         </div>
