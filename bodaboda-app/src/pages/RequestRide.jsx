@@ -189,7 +189,7 @@ const RequestRide = () => {
             style={{ border: 0 }} 
             allowFullScreen="" 
             loading="lazy" 
-            className="absolute inset-0 grayscale contrast-125 opacity-80"
+            className="absolute inset-0"
             title="Dodoma Map"
           ></iframe>
           
