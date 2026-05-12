@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # Production PostgreSQL
+  postgres-production:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: bodaboda_production_db
+      POSTGRES_USER: bodaboda_production
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_production_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Production Backend
+  backend-production:
+    image: ghcr.io/kisingezainabu-cell/bodaboda-app:latest
+    environment:
+      - DATABASE_URL=postgresql://bodaboda_production:${POSTGRES_PASSWORD}@postgres-production:5432/bodaboda_production_db
+      - FLASK_ENV=production
+      - REDIS_URL=redis://redis-production:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - PROMETHEUS_GATEWAY_URL=http://prometheus-production:9090
+    depends_on:
+      - postgres-production
+      - redis-production
+    ports:
+      - "5000:5000"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # Production Frontend
+  frontend-production:
+    image: ghcr.io/kisingezainabu-cell/bodaboda-app:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend-production
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Production Redis
+  redis-production:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Production Prometheus
+  prometheus-production:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Production Grafana
+  grafana-production:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      - GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      - GF_SERVER_ROOT_URL: https://grafana.bodaboda.app
+    volumes:
+      - grafana_production_data:/var/lib/grafana
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+networks:
+  bodaboda-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_production_data:
+  postgres_production_backups:
+  grafana_production_data:

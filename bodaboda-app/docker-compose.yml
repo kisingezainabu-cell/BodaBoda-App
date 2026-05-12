@@ -1,0 +1,27 @@
+services:
+  # Frontend - React/Vite App
+  frontend:
+    image: zaynabkisinge/bodaboda-frontend:latest
+    container_name: bodaboda-frontend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks:
+      - bodaboda-network
+
+  # Backend - Flask API
+  backend:
+    image: zaynabkisinge/bodaboda-backend:latest
+    container_name: bodaboda-backend
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - bodaboda-network
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+
+networks:
+  bodaboda-network:
+    driver: bridge

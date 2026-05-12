@@ -1,0 +1,13 @@
+# Simple Python backend Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy the minimal backend app
+COPY minimal_app.py .
+
+# Expose port
+EXPOSE 5000
+
+# Run the application
+CMD ["python", "minimal_app.py"]
