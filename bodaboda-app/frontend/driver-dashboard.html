@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BodaBoda - Driver Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">🏍️ BodaBoda</h1>
+            <nav class="nav">
+                <button id="logout-btn" class="btn btn-outline">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <!-- Driver Profile -->
+            <section class="dashboard-section">
+                <h2>Driver Profile</h2>
+                <div class="driver-profile">
+                    <div class="profile-info">
+                        <h3 id="driver-name">Driver Name</h3>
+                        <p><strong>Email:</strong> <span id="email">driver@bodaboda.com</span></p>
+                        <p><strong>Phone:</strong> <span id="phone">+255123456789</span></p>
+                        <p><strong>Rating:</strong> ⭐ <span id="rating">5.0</span></p>
+                        <p><strong>Total Rides:</strong> <span id="total-rides">0</span></p>
+                    </div>
+                    <div class="vehicle-info">
+                        <h4>Vehicle Information</h4>
+                        <p><strong>Make:</strong> <span id="vehicle-make">Unknown</span></p>
+                        <p><strong>Model:</strong> <span id="vehicle-model">Unknown</span></p>
+                        <p><strong>License Plate:</strong> <span id="license-plate">Unknown</span></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Availability Toggle -->
+            <section class="dashboard-section">
+                <h3>Availability Status</h3>
+                <div class="availability-toggle">
+                    <label class="switch">
+                        <input type="checkbox" id="available-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <span id="availability-status">Available</span>
+                </div>
+            </section>
+
+            <!-- Location Update -->
+            <section class="dashboard-section">
+                <h3>Update Location</h3>
+                <form id="location-form" class="location-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="latitude">Latitude</label>
+                            <input type="number" id="latitude" step="0.000001" required placeholder="-6.8">
+                        </div>
+                        <div class="form-group">
+                            <label for="longitude">Longitude</label>
+                            <input type="number" id="longitude" step="0.000001" required placeholder="39.2">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Location</button>
+                    <button type="button" id="auto-location" class="btn btn-secondary">Use My Location</button>
+                </form>
+            </section>
+
+            <!-- Ride Requests -->
+            <section class="dashboard-section">
+                <h3>Ride Requests</h3>
+                <div id="ride-requests" class="ride-requests">
+                    <p>Waiting for ride requests...</p>
+                </div>
+            </section>
+
+            <!-- Earnings -->
+            <section class="dashboard-section">
+                <h3>Today's Earnings</h3>
+                <div class="earnings-summary">
+                    <div class="earnings-item">
+                        <h4>Total Rides</h4>
+                        <p id="daily-rides">0</p>
+                    </div>
+                    <div class="earnings-item">
+                        <h4>Total Earnings</h4>
+                        <p id="daily-earnings">0 TZS</p>
+                    </div>
+                    <div class="earnings-item">
+                        <h4>Average per Ride</h4>
+                        <p id="average-earnings">0 TZS</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 BodaBoda. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script type="module" src="api.js"></script>
+    <script type="module" src="auth.js"></script>
+    <script>
+        // Initialize driver dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check authentication
+            if (!api.isAuthenticated()) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Check user type
+            if (!api.isDriver()) {
+                window.location.href = '/rider-dashboard.html';
+                return;
+            }
+
+            // Update user info
+            document.getElementById('driver-name').textContent = api.user.username;
+            document.getElementById('email').textContent = api.user.email;
+            document.getElementById('phone').textContent = api.user.phone_number;
+
+            // Load driver profile
+            await loadDriverProfile();
+
+            // Setup location form
+            setupLocationForm();
+
+            // Setup availability toggle
+            setupAvailabilityToggle();
+
+            // Load ride requests
+            await loadRideRequests();
+
+            // Load earnings
+            await loadEarnings();
+
+            // Setup auto location
+            setupAutoLocation();
+
+            // Logout handler
+            document.getElementById('logout-btn').addEventListener('click', authManager.handleLogout.bind(authManager));
+        });
+
+        // Load driver profile
+        async function loadDriverProfile() {
+            try {
+                // This would typically call an API endpoint to get driver's profile
+                // For now, show placeholder data
+                document.getElementById('vehicle-make').textContent = 'Honda';
+                document.getElementById('vehicle-model').textContent = 'CB150';
+                document.getElementById('license-plate').textContent = 'DRV001';
+                document.getElementById('rating').textContent = '4.8';
+                document.getElementById('total-rides').textContent = '127';
+            } catch (error) {
+                console.error('Error loading driver profile:', error);
+            }
+        }
+
+        // Setup location form
+        function setupLocationForm() {
+            const locationForm = document.getElementById('location-form');
+            
+            locationForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                
+                const formData = new FormData(locationForm);
+                const locationData = {
+                    latitude: parseFloat(formData.get('latitude')),
+                    longitude: parseFloat(formData.get('longitude'))
+                };
+
+                try {
+                    // This would call an API endpoint to update driver location
+                    authManager.showSuccess('Location updated successfully!');
+                } catch (error) {
+                    authManager.showError('Failed to update location');
+                }
+            });
+        }
+
+        // Setup availability toggle
+        function setupAvailabilityToggle() {
+            const toggle = document.getElementById('available-toggle');
+            const status = document.getElementById('availability-status');
+            
+            toggle.addEventListener('change', async () => {
+                const isAvailable = toggle.checked;
+                status.textContent = isAvailable ? 'Available' : 'Unavailable';
+                
+                try {
+                    // This would call an API endpoint to update availability
+                    authManager.showSuccess(`Availability set to: ${isAvailable ? 'Available' : 'Unavailable'}`);
+                } catch (error) {
+                    authManager.showError('Failed to update availability');
+                }
+            });
+        }
+
+        // Load ride requests
+        async function loadRideRequests() {
+            try {
+                // This would call an API endpoint to get ride requests
+                // For now, show placeholder data
+                const rideRequests = document.getElementById('ride-requests');
+                rideRequests.innerHTML = `
+                    <div class="ride-request">
+                        <div class="request-info">
+                            <h4>New Ride Request</h4>
+                            <p><strong>Pickup:</strong> Kijitonyama</p>
+                            <p><strong>Destination:</strong> Mwenge</p>
+                            <p><strong>Estimated Fare:</strong> 2,500 TZS</p>
+                            <p><strong>Distance:</strong> 3.2 km</p>
+                        </div>
+                        <div class="request-actions">
+                            <button onclick="acceptRide(1)" class="btn btn-primary">Accept</button>
+                            <button onclick="rejectRide(1)" class="btn btn-outline">Reject</button>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('ride-requests').innerHTML = 
+                    '<p>Error loading ride requests. Please try again.</p>';
+            }
+        }
+
+        // Load earnings
+        async function loadEarnings() {
+            try {
+                // This would call an API endpoint to get driver's earnings
+                // For now, show placeholder data
+                document.getElementById('daily-rides').textContent = '8';
+                document.getElementById('daily-earnings').textContent = '24,000';
+                document.getElementById('average-earnings').textContent = '3,000';
+            } catch (error) {
+                console.error('Error loading earnings:', error);
+            }
+        }
+
+        // Setup auto location
+        function setupAutoLocation() {
+            const autoLocationBtn = document.getElementById('auto-location');
+            
+            autoLocationBtn.addEventListener('click', () => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            document.getElementById('latitude').value = position.coords.latitude;
+                            document.getElementById('longitude').value = position.coords.longitude;
+                            authManager.showSuccess('Location detected from GPS!');
+                        },
+                        (error) => {
+                            authManager.showError('Unable to get your location. Please enter manually.');
+                        }
+                    );
+                } else {
+                    authManager.showError('Geolocation is not supported by your browser.');
+                }
+            });
+        }
+
+        // Accept ride
+        function acceptRide(rideId) {
+            authManager.showSuccess('Ride accepted! Navigate to pickup location.');
+            // This would call an API to accept the ride
+        }
+
+        // Reject ride
+        function rejectRide(rideId) {
+            authManager.showSuccess('Ride rejected.');
+            // This would call an API to reject the ride
+        }
+    </script>
+</body>
+</html>

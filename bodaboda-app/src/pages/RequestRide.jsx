@@ -1,216 +1,293 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../AuthContext';
+import api from '../api';
+import { ChevronRight, MapPin, Navigation, Clock, User, CheckCircle, Search, Info, Bike, DollarSign, Map as MapIcon, Star, Phone } from 'lucide-react';
 
 const RequestRide = () => {
   const [formData, setFormData] = useState({
     pickup: '',
     destination: '',
-    phone: '',
-    name: ''
+    guest_name: '',
+    guest_phone: ''
   });
-  const [status, setStatus] = useState('idle'); // idle, searching, found
-  const [errors, setErrors] = useState({});
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [status, setStatus] = useState('idle'); // idle, choosing, searching, found
+  const [activeRide, setActiveRide] = useState(null);
+  const [estimatedPrice, setEstimatedPrice] = useState(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const { user } = useAuth();
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-    // Clear error when typing
-    if (errors[e.target.name]) {
-      setErrors({
-        ...errors,
-        [e.target.name]: null
-      });
+  useEffect(() => {
+    fetchNearbyDrivers();
+    const interval = setInterval(fetchNearbyDrivers, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let interval;
+    if (status === 'searching' && activeRide) {
+        interval = setInterval(async () => {
+            try {
+                const ride = await api.getRideDetail(activeRide.id);
+                if (ride.status === 'accepted') {
+                    setActiveRide(ride);
+                    setStatus('found');
+                    clearInterval(interval);
+                }
+            } catch (err) {
+                console.error("Error polling ride status", err);
+            }
+        }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [status, activeRide]);
+
+  const fetchNearbyDrivers = async () => {
+    try {
+      const drivers = await api.getOnlineDrivers();
+      setNearbyDrivers(drivers);
+    } catch (err) {
+      console.error("Failed to fetch drivers", err);
     }
   };
 
-  const validate = () => {
-    const newErrors = {};
-    if (!formData.pickup.trim()) newErrors.pickup = 'Pickup location is required';
-    if (!formData.destination.trim()) newErrors.destination = 'Destination is required';
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
-    return newErrors;
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const validationErrors = validate();
+  const handleCalculatePrice = () => {
+    if (!formData.pickup || !formData.destination) return;
     
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
+    // Check if guest info is needed
+    if (!user && (!formData.guest_name || !formData.guest_phone)) {
+        alert("Please enter your name and phone number so the rider can contact you.");
+        return;
     }
 
-    // Simulate finding a rider
-    setStatus('searching');
+    setIsCalculating(true);
     setTimeout(() => {
-      setStatus('found');
-    }, 3000);
+        const baseFare = 1500;
+        const seed = (formData.pickup.length * formData.destination.length);
+        const distanceFactor = (seed % 10) * 400 + 500; 
+        setEstimatedPrice(baseFare + distanceFactor);
+        setIsCalculating(false);
+        setStatus('choosing');
+    }, 800);
+  };
+
+  const handleRequestDriver = async (driverId) => {
+    setStatus('searching');
+    try {
+        const ride = await api.requestRide({
+            pickup_location: formData.pickup,
+            destination_location: formData.destination,
+            price: estimatedPrice,
+            driver_id: driverId,
+            guest_name: formData.guest_name,
+            guest_phone: formData.guest_phone
+        });
+        setActiveRide(ride);
+    } catch (err) {
+        alert(err.message);
+        setStatus('choosing');
+    }
   };
 
   return (
-    <div className="flex-grow bg-slate-50 py-12 px-4 sm:px-6">
-      <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-8">
-        
-        {/* Left Side: Form */}
-        <div className="w-full md:w-1/2">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-            <div className="mb-8">
-              <h1 className="text-2xl font-bold text-slate-900 mb-2">Request a Ride</h1>
-              <p className="text-slate-500 text-sm">Enter your details and we'll find a boda nearby.</p>
+    <div className="flex-grow bg-slate-50 min-h-screen pb-20 font-sans text-slate-900">
+      <div className="bg-emerald-600 py-16 relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4 relative z-10">
+            <h1 className="text-3xl font-black text-white mb-2">BodaBoda Direct</h1>
+            <p className="text-emerald-100 font-medium">Quick rides for everyone. No account needed.</p>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 -mt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          
+          {/* Booking Panel */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-[32px] shadow-2xl border border-slate-200 p-8 sticky top-24">
+                {status === 'idle' && (
+                    <form className="space-y-6">
+                        {/* Guest Information (Only if not logged in) */}
+                        {!user && (
+                            <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-4 mb-2">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Info (Guest)</p>
+                                <div className="relative">
+                                    <User className="absolute left-4 top-3.5 text-slate-400" size={16} />
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        placeholder="Your Name"
+                                        value={formData.guest_name}
+                                        onChange={(e) => setFormData({...formData, guest_name: e.target.value})}
+                                        required
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <Phone className="absolute left-4 top-3.5 text-slate-400" size={16} />
+                                    <input 
+                                        type="tel" 
+                                        className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        placeholder="Phone Number"
+                                        value={formData.guest_phone}
+                                        onChange={(e) => setFormData({...formData, guest_phone: e.target.value})}
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pickup</label>
+                                <div className="relative">
+                                    <MapPin className="absolute left-4 top-3.5 text-emerald-500" size={18} />
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                        placeholder="Pickup location"
+                                        value={formData.pickup}
+                                        onChange={(e) => setFormData({...formData, pickup: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Destination</label>
+                                <div className="relative">
+                                    <Navigation className="absolute left-4 top-3.5 text-orange-500" size={18} />
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                        placeholder="Destination"
+                                        value={formData.destination}
+                                        onChange={(e) => setFormData({...formData, destination: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <button 
+                            type="button"
+                            onClick={handleCalculatePrice}
+                            disabled={!formData.pickup || !formData.destination || isCalculating}
+                            className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-3 disabled:opacity-50"
+                        >
+                            {isCalculating ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Search size={20} />}
+                            {isCalculating ? 'Mapping...' : 'Find Available Riders'}
+                        </button>
+                    </form>
+                )}
+
+                {status === 'choosing' && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl text-center">
+                            <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Estimated Fare</p>
+                            <p className="text-4xl font-black text-emerald-700">TSh {estimatedPrice?.toLocaleString()}</p>
+                        </div>
+                        <p className="text-sm text-slate-500 text-center px-4 font-medium italic">Please select a rider from the list to send your request.</p>
+                        <button onClick={() => setStatus('idle')} className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-all">Change Route</button>
+                    </div>
+                )}
+
+                {status === 'searching' && (
+                    <div className="text-center py-16 animate-fade-in">
+                        <div className="relative w-24 h-24 mx-auto mb-10">
+                            <div className="absolute inset-0 border-4 border-emerald-100 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-emerald-600 rounded-full border-t-transparent animate-spin"></div>
+                            <div className="absolute inset-0 flex items-center justify-center text-emerald-600"><Bike size={32} /></div>
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Request Sent!</h2>
+                        <p className="text-slate-500 mb-10 px-4">Waiting for the rider to confirm your trip...</p>
+                        <button onClick={() => setStatus('choosing')} className="text-red-500 font-bold hover:underline">Cancel & Reselect</button>
+                    </div>
+                )}
+
+                {status === 'found' && (
+                    <div className="text-center py-10 animate-fade-in">
+                        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle size={40} />
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Trip Confirmed!</h2>
+                        <p className="text-slate-500 mb-10">Your rider is coming to you.</p>
+                        
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-left mb-10">
+                            <p className="font-bold text-slate-900 text-lg mb-1">{activeRide?.driver_details?.full_name}</p>
+                            <p className="text-xs font-bold text-emerald-600 mb-4">{activeRide?.driver_details?.license_plate}</p>
+                            <div className="flex justify-between pt-4 border-t border-slate-200">
+                                <div><p className="text-[10px] text-slate-400 font-black uppercase mb-1">Fare</p><p className="font-bold">TSh {activeRide?.price}</p></div>
+                                <div className="text-right"><p className="text-[10px] text-slate-400 font-black uppercase mb-1">Status</p><p className="font-bold text-emerald-600 uppercase text-[10px]">{activeRide?.status}</p></div>
+                            </div>
+                        </div>
+                        <button onClick={() => setStatus('idle')} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold">Book Another Trip</button>
+                    </div>
+                )}
+            </div>
+          </div>
+
+          {/* Map and Rider Selection List */}
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white rounded-[40px] border border-slate-200 shadow-xl overflow-hidden h-[450px] relative">
+                <iframe 
+                    src="https://www.openstreetmap.org/export/embed.html?bbox=35.65,-6.22,35.82,-6.12&layer=mapnik" 
+                    width="100%" height="100%" style={{ border: 0 }} title="Map"
+                ></iframe>
+                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur px-5 py-2.5 rounded-2xl border border-slate-200 shadow-lg flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <p className="text-sm font-black text-slate-900">{nearbyDrivers.length} Available Riders Nearby</p>
+                </div>
             </div>
 
-            {status === 'idle' && (
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label htmlFor="pickup" className="block text-sm font-medium text-slate-700 mb-1">Pickup Location <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute top-3 left-3 w-3 h-3 rounded-full border-2 border-emerald-600 bg-white"></div>
-                    <input
-                      type="text"
-                      id="pickup"
-                      name="pickup"
-                      value={formData.pickup}
-                      onChange={handleChange}
-                      placeholder="e.g. Dodoma Central Market"
-                      autoFocus
-                      className={`w-full pl-10 pr-4 py-3 bg-slate-50 border ${errors.pickup ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500'} rounded-xl text-slate-900 focus:ring-2 focus:outline-none transition-all`}
-                    />
-                  </div>
-                  {errors.pickup && <p className="mt-1 text-sm text-red-500">{errors.pickup}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="destination" className="block text-sm font-medium text-slate-700 mb-1">Destination <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute top-3 left-3 w-3 h-3 rounded-sm bg-orange-500"></div>
-                    <div className="absolute top-[-24px] left-[17px] w-px h-6 bg-slate-300"></div>
-                    <input
-                      type="text"
-                      id="destination"
-                      name="destination"
-                      value={formData.destination}
-                      onChange={handleChange}
-                      placeholder="e.g. University of Dodoma"
-                      className={`w-full pl-10 pr-4 py-3 bg-slate-50 border ${errors.destination ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500'} rounded-xl text-slate-900 focus:ring-2 focus:outline-none transition-all`}
-                    />
-                  </div>
-                  {errors.destination && <p className="mt-1 text-sm text-red-500">{errors.destination}</p>}
-                </div>
-
-                <div className="pt-2 border-t border-slate-100">
-                  <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1">Phone Number <span className="text-red-500">*</span></label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="07xx xxx xxx"
-                    className={`w-full px-4 py-3 bg-slate-50 border ${errors.phone ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-slate-200 focus:ring-emerald-500 focus:border-emerald-500'} rounded-xl text-slate-900 focus:ring-2 focus:outline-none transition-all`}
-                  />
-                  {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
-                </div>
-
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">Name <span className="text-slate-400 font-normal">(Optional)</span></label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="What should the rider call you?"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:ring-emerald-500 focus:border-emerald-500 rounded-xl text-slate-900 focus:ring-2 focus:outline-none transition-all"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full mt-6 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-lg shadow-sm shadow-emerald-600/20 transition-all active:scale-[0.98]"
-                >
-                  Request Ride
-                </button>
-              </form>
-            )}
-
-            {status === 'searching' && (
-              <div className="py-12 flex flex-col items-center justify-center text-center animate-pulse">
-                <div className="w-16 h-16 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mb-6"></div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Looking for a rider...</h3>
-                <p className="text-slate-500">Contacting nearby boda bodas</p>
-              </div>
-            )}
-
-            {status === 'found' && (
-              <div className="py-8 flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Rider on the way!</h3>
-                <p className="text-slate-500 mb-6">Juma is arriving in 4 minutes</p>
+            <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-10">
+                <h3 className="text-2xl font-bold text-slate-900 mb-8 flex items-center gap-3">
+                    {status === 'choosing' ? 'Select Your Rider' : 'Nearby Riders'}
+                </h3>
                 
-                <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-slate-200 rounded-full overflow-hidden">
-                      <img src="https://i.pravatar.cc/150?img=11" alt="Rider" className="w-full h-full object-cover" />
+                {nearbyDrivers.length === 0 ? (
+                    <div className="py-20 text-center bg-slate-50 rounded-[40px] border-2 border-dashed border-slate-100">
+                        <Bike size={48} className="text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold">Searching for online riders in Dodoma...</p>
                     </div>
-                    <div className="text-left">
-                      <p className="font-bold text-slate-900">Juma Makoye</p>
-                      <p className="text-sm text-slate-500 flex items-center gap-1">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                        4.9 (120 trips)
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold">Plate</p>
-                    <p className="font-bold text-slate-900">MC 123 BDF</p>
-                  </div>
-                </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {nearbyDrivers.map(dr => (
+                            <div key={dr.id} className={`p-8 bg-slate-50 rounded-[32px] border transition-all ${status === 'choosing' ? 'border-emerald-100 hover:border-emerald-400 hover:bg-white hover:shadow-2xl hover:scale-[1.02] cursor-pointer ring-offset-4 ring-emerald-500' : 'border-slate-100'}`}>
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-2xl shadow-sm">
+                                        {dr.username[0].toUpperCase()}
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-100 shadow-sm">
+                                        <Star size={12} className="text-orange-400 fill-orange-400" />
+                                        <span className="text-[10px] font-black text-slate-700">4.9</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="mb-8">
+                                    <p className="font-bold text-slate-900 text-xl mb-1">{dr.full_name || dr.username}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{dr.vehicle_make}</p>
+                                        <div className="w-1 h-1 rounded-full bg-emerald-500"></div>
+                                        <p className="text-[10px] font-black text-emerald-600 uppercase">3 min away</p>
+                                    </div>
+                                </div>
 
-                <button
-                  onClick={() => setStatus('idle')}
-                  className="px-6 py-3 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                >
-                  Cancel Ride
-                </button>
-              </div>
-            )}
+                                {status === 'choosing' ? (
+                                    <button 
+                                        onClick={() => handleRequestDriver(dr.id)}
+                                        className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        Book This Rider <ChevronRight size={18} />
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-emerald-600">
+                                        <CheckCircle size={14} />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider">Available Now</span>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
           </div>
         </div>
-
-        {/* Right Side: Map Embedded */}
-        <div className="w-full md:w-1/2 h-64 md:h-auto min-h-[400px] bg-slate-200 rounded-2xl overflow-hidden relative border border-slate-300 shadow-inner">
-          <iframe 
-            src="https://www.openstreetmap.org/export/embed.html?bbox=35.65,-6.22,35.82,-6.12&layer=mapnik" 
-            width="100%" 
-            height="100%" 
-            style={{ border: 0 }} 
-            allowFullScreen="" 
-            loading="lazy" 
-            className="absolute inset-0"
-            title="Dodoma Map"
-          ></iframe>
-          
-          {/* Overlay elements for realism */}
-          <div className="absolute inset-0 pointer-events-none">
-            {formData.pickup && (
-              <div className="absolute top-[20%] left-[30%] flex flex-col items-center">
-                <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded shadow-lg mb-1 whitespace-nowrap">{formData.pickup}</div>
-                <div className="w-4 h-4 bg-white rounded-full border-4 border-emerald-600 shadow-md"></div>
-              </div>
-            )}
-            
-            {formData.destination && (
-               <div className="absolute bottom-[30%] right-[30%] flex flex-col items-center">
-                 <div className="bg-slate-900 text-white text-xs px-2 py-1 rounded shadow-lg mb-1 whitespace-nowrap">{formData.destination}</div>
-                 <div className="w-4 h-4 bg-orange-500 rounded-sm shadow-md"></div>
-               </div>
-            )}
-          </div>
-        </div>
-
       </div>
     </div>
   );

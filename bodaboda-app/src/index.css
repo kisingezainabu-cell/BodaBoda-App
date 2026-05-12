@@ -1,8 +1,57 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f8fafc; /* slate-50 */
-  color: #0f172a; /* slate-900 */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui;
+  --font-outfit: 'Outfit', sans-serif;
+  
+  --color-primary: #10b981;
+  --color-primary-dark: #059669;
+  --color-primary-light: #d1fae5;
+  
+  --shadow-premium: 0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 4px 10px -5px rgba(0, 0, 0, 0.05);
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
+/* Fix: Define custom utilities using @utility so Tailwind recognizes them */
+@utility bg-grad-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+@utility bg-grad-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+@utility bg-grad-dark {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+@utility text-grad-primary {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+@utility animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Helper classes for the pages */
+@utility btn-premium {
+  @apply inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold transition-all duration-200 active:scale-95;
+}
+
+@utility card-premium {
+  @apply bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-premium transition-all duration-300;
 }

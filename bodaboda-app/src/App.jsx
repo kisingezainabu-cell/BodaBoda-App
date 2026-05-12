@@ -1,40 +1,79 @@
-import { useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './AuthContext';
 import Navigation from './components/Navigation';
 import Home from './pages/Home';
 import RequestRide from './pages/RequestRide';
 import RiderLogin from './pages/RiderLogin';
 import RiderDashboard from './pages/RiderDashboard';
+import DriverDashboard from './pages/DriverDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [riderName, setRiderName] = useState('Demo Rider');
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'home':
-        return <Home onNavigate={setCurrentPage} />;
-      case 'request':
-        return <RequestRide onNavigate={setCurrentPage} />;
-      case 'login':
-        return <RiderLogin onNavigate={setCurrentPage} onLogin={(name) => {
-          setRiderName(name);
-          setCurrentPage('dashboard');
-        }} />;
-      case 'dashboard':
-        return <RiderDashboard riderName={riderName} onNavigate={setCurrentPage} />;
-      default:
-        return <Home onNavigate={setCurrentPage} />;
+// Protected Route Component
+const ProtectedRoute = ({ children, role }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (!user) return <Navigate to="/login" />;
+  if (role) {
+    // Admins and superusers can access admin pages
+    if (role === 'admin' && (user.user_type === 'admin' || user.is_superuser)) {
+        return children;
     }
-  };
+    // Riders and drivers must match their specific role
+    if (user.user_type !== role) {
+        return <Navigate to="/" />;
+    }
+  }
+
+  
+  return children;
+};
+
+function AppContent() {
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      <Navigation currentPage={currentPage} onNavigate={setCurrentPage} />
+      <Navigation />
       <main className="flex-grow flex flex-col">
-        {renderPage()}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<RiderLogin />} />
+          <Route path="/register" element={<RiderLogin isRegister={true} />} />
+          <Route path="/request" element={<RequestRide />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <RiderDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/driver-dashboard" 
+            element={
+              <ProtectedRoute role="driver">
+                <DriverDashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Driver routes could be added here */}
+          <Route 
+            path="/admin-dashboard" 
+            element={
+              <ProtectedRoute role="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="*" element={<Navigate to="/" />} />
+
+        </Routes>
       </main>
       
-      {/* Simple Footer */}
       <footer className="bg-slate-900 text-slate-300 py-8 border-t border-slate-800 mt-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
@@ -59,6 +98,16 @@ function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </AuthProvider>
   );
 }
 

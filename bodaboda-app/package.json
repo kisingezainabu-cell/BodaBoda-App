@@ -39,9 +39,21 @@
 
 
     "docker:build": "docker-compose build",
+
+
+
     "docker:up": "docker-compose up frontend backend",
+
+
+
     "docker:up:frontend": "docker-compose up frontend",
+
+
+
     "docker:up:backend": "docker-compose up backend",
+
+
+
     "docker:down": "docker-compose down"
 
 
@@ -58,11 +70,19 @@
 
 
 
+    "lucide-react": "^1.14.0",
+
+
+
     "react": "^19.2.5",
 
 
 
     "react-dom": "^19.2.5",
+
+
+
+    "react-router-dom": "^7.15.0",
 
 
 

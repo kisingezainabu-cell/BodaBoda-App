@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BodaBoda - Rider Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">🏍️ BodaBoda</h1>
+            <nav class="nav">
+                <button id="logout-btn" class="btn btn-outline">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <!-- User Profile -->
+            <section class="dashboard-section">
+                <h2>Welcome, <span id="username">Rider</span>!</h2>
+                <div class="user-info">
+                    <p><strong>Email:</strong> <span id="email">rider@bodaboda.com</span></p>
+                    <p><strong>Account Type:</strong> Rider</p>
+                </div>
+            </section>
+
+            <!-- Book Ride -->
+            <section class="dashboard-section">
+                <h3>Book a Ride</h3>
+                <form id="ride-form" class="ride-form">
+                    <div class="form-group">
+                        <label for="pickup">Pickup Location</label>
+                        <input type="text" id="pickup" name="pickup" required placeholder="Enter pickup address">
+                    </div>
+                    <div class="form-group">
+                        <label for="destination">Destination</label>
+                        <input type="text" id="destination" name="destination" required placeholder="Enter destination">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="pickup-lat">Pickup Latitude</label>
+                            <input type="number" id="pickup-lat" name="pickup_latitude" step="0.000001" required placeholder="-6.8">
+                        </div>
+                        <div class="form-group">
+                            <label for="pickup-lng">Pickup Longitude</label>
+                            <input type="number" id="pickup-lng" name="pickup_longitude" step="0.000001" required placeholder="39.2">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dest-lat">Destination Latitude</label>
+                            <input type="number" id="dest-lat" name="destination_latitude" step="0.000001" required placeholder="-6.9">
+                        </div>
+                        <div class="form-group">
+                            <label for="dest-lng">Destination Longitude</label>
+                            <input type="number" id="dest-lng" name="destination_longitude" step="0.000001" required placeholder="39.3">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Request Ride</button>
+                </form>
+            </section>
+
+            <!-- Available Drivers -->
+            <section class="dashboard-section">
+                <h3>Nearby Drivers</h3>
+                <div id="drivers-list" class="drivers-list">
+                    <p>Loading nearby drivers...</p>
+                </div>
+            </section>
+
+            <!-- Ride History -->
+            <section class="dashboard-section">
+                <h3>Recent Rides</h3>
+                <div id="rides-history" class="rides-history">
+                    <p>No rides yet. Book your first ride!</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 BodaBoda. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script type="module" src="api.js"></script>
+    <script type="module" src="auth.js"></script>
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check authentication
+            if (!api.isAuthenticated()) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Check user type
+            if (!api.isRider()) {
+                window.location.href = '/driver-dashboard.html';
+                return;
+            }
+
+            // Update user info
+            document.getElementById('username').textContent = api.user.username;
+            document.getElementById('email').textContent = api.user.email;
+
+            // Load nearby drivers
+            await loadNearbyDrivers();
+
+            // Setup ride form
+            setupRideForm();
+
+            // Load ride history
+            await loadRideHistory();
+        });
+
+        // Load nearby drivers
+        async function loadNearbyDrivers() {
+            try {
+                // Use default location (Dar es Salaam)
+                const lat = -6.8;
+                const lng = 39.2;
+                
+                const response = await api.getNearbyDrivers(lat, lng);
+                const driversList = document.getElementById('drivers-list');
+                
+                if (response.drivers && response.drivers.length > 0) {
+                    driversList.innerHTML = response.drivers.map(driver => `
+                        <div class="driver-card">
+                            <div class="driver-info">
+                                <h4>${driver.driver_name}</h4>
+                                <p>📍 ${driver.distance_km} km away</p>
+                                <p>⭐ ${driver.rating} rating</p>
+                                <p>🏍️ ${driver.vehicle_info.make} ${driver.vehicle_info.model}</p>
+                                <p>🚗 ${driver.license_plate}</p>
+                                <p>⏱️ ${driver.estimated_arrival}</p>
+                            </div>
+                            <button onclick="requestDriverRide(${JSON.stringify(driver).replace(/"/g, '&quot;')})" 
+                                    class="btn btn-secondary">
+                                Book This Driver
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    driversList.innerHTML = '<p>No drivers available nearby. Please try again later.</p>';
+                }
+            } catch (error) {
+                document.getElementById('drivers-list').innerHTML = 
+                    '<p>Error loading drivers. Please try again.</p>';
+            }
+        }
+
+        // Setup ride form
+        function setupRideForm() {
+            const rideForm = document.getElementById('ride-form');
+            
+            rideForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                
+                const formData = new FormData(rideForm);
+                const rideData = {
+                    rider_id: api.user.id,
+                    pickup_address: formData.get('pickup'),
+                    destination_address: formData.get('destination'),
+                    pickup_latitude: parseFloat(formData.get('pickup_latitude')),
+                    pickup_longitude: parseFloat(formData.get('pickup_longitude')),
+                    destination_latitude: parseFloat(formData.get('destination_latitude')),
+                    destination_longitude: parseFloat(formData.get('destination_longitude'))
+                };
+
+                try {
+                    const response = await api.requestRide(rideData);
+                    authManager.showSuccess(`Ride requested! Estimated fare: ${response.estimated_fare} TZS`);
+                    
+                    // Clear form
+                    rideForm.reset();
+                    
+                    // Reload ride history
+                    await loadRideHistory();
+                } catch (error) {
+                    authManager.showError(error.message || 'Failed to request ride');
+                }
+            });
+        }
+
+        // Request ride with specific driver
+        async function requestDriverRide(driver) {
+            const rideData = {
+                rider_id: api.user.id,
+                pickup_address: 'Current Location',
+                destination_address: 'Enter Destination',
+                pickup_latitude: driver.location.latitude,
+                pickup_longitude: driver.location.longitude,
+                destination_latitude: -6.9,  // Default destination
+                destination_longitude: 39.3
+            };
+
+            try {
+                const response = await api.requestRide(rideData);
+                authManager.showSuccess(`Ride requested with ${driver.driver_name}! Estimated fare: ${response.estimated_fare} TZS`);
+                await loadRideHistory();
+            } catch (error) {
+                authManager.showError(error.message || 'Failed to request ride');
+            }
+        }
+
+        // Load ride history
+        async function loadRideHistory() {
+            // This would typically call an API endpoint to get user's rides
+            // For now, show placeholder
+            const ridesHistory = document.getElementById('rides-history');
+            ridesHistory.innerHTML = '<p>Ride history feature coming soon...</p>';
+        }
+
+        // Logout handler
+        document.getElementById('logout-btn').addEventListener('click', authManager.handleLogout.bind(authManager));
+    </script>
+</body>
+</html>

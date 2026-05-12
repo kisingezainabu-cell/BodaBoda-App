@@ -1,0 +1,96 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: bodaboda_db
+      POSTGRES_USER: bodaboda
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bodaboda -d bodaboda_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # BodaBoda Backend with Database
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.database
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=bodaboda_db
+      - DB_USER=bodaboda
+      - DB_PASSWORD=password123
+      - JWT_SECRET=bodaboda-jwt-secret-key
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "81:80"
+    depends_on:
+      - backend
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    ports:
+      - "3002:3000"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+  # Node Exporter
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    networks:
+      - bodaboda-network
+    restart: unless-stopped
+
+networks:
+  bodaboda-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

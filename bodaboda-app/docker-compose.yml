@@ -1,27 +1,47 @@
 services:
-  # Frontend - React/Vite App
-  frontend:
-    image: zaynabkisinge/bodaboda-frontend:latest
-    container_name: bodaboda-frontend
-    ports:
-      - "80:80"
-    restart: unless-stopped
-    networks:
-      - bodaboda-network
-
-  # Backend - Flask API
-  backend:
-    image: zaynabkisinge/bodaboda-backend:latest
-    container_name: bodaboda-backend
-    ports:
-      - "5000:5000"
-    restart: unless-stopped
-    networks:
-      - bodaboda-network
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
     environment:
-      - FLASK_ENV=production
-      - FLASK_APP=app.py
+      - POSTGRES_DB=bodaboda_db
+      - POSTGRES_USER=bodaboda
+      - POSTGRES_PASSWORD=password123
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bodaboda -d bodaboda_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  bodaboda-network:
-    driver: bridge
+  backend:
+    build: ./backend
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_NAME=bodaboda_db
+      - DB_USER=bodaboda
+      - DB_PASSWORD=password123
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-bodaboda-app-key-123456789
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
