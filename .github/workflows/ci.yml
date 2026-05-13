@@ -40,7 +40,8 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build Docker image
-      run: docker build -t bodaboda-app:v1 .
+  working-directory: bodaboda-app
+  run: docker build -t bodaboda-app:v1 .
 
   staging:
     needs: docker-build
