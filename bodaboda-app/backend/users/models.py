@@ -19,6 +19,12 @@ class User(AbstractUser):
     
     # Tracking fields
     is_online = models.BooleanField(default=False)
+    
+    # Real-time location
+    current_lat = models.FloatField(null=True, blank=True)
+    current_lng = models.FloatField(null=True, blank=True)
+    
+    # Rider/Driver specific info
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
 

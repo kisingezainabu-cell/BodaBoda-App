@@ -16,6 +16,13 @@ class RideRequestView(generics.CreateAPIView):
         guest_name = self.request.data.get('guest_name')
         guest_phone = self.request.data.get('guest_phone')
 
+        # Generate mock Dodoma coordinates (around 35.74, -6.17)
+        import random
+        p_lat = -6.17 + (random.random() - 0.5) * 0.05
+        p_lng = 35.74 + (random.random() - 0.5) * 0.05
+        d_lat = -6.17 + (random.random() - 0.5) * 0.05
+        d_lng = 35.74 + (random.random() - 0.5) * 0.05
+
         if driver_id:
             from django.contrib.auth import get_user_model
             User = get_user_model()
@@ -26,12 +33,16 @@ class RideRequestView(generics.CreateAPIView):
                     driver=driver, 
                     status='requested',
                     guest_name=guest_name,
-                    guest_phone=guest_phone
+                    guest_phone=guest_phone,
+                    pickup_lat=p_lat,
+                    pickup_lng=p_lng,
+                    destination_lat=d_lat,
+                    destination_lng=d_lng
                 )
             except User.DoesNotExist:
-                serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone)
+                serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
         else:
-            serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone)
+            serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
 
 class AvailableRidesView(generics.ListAPIView):
     serializer_class = RideSerializer
@@ -66,11 +77,24 @@ class RideAcceptView(APIView):
 class RideDetailView(generics.RetrieveUpdateAPIView):
     queryset = Ride.objects.all()
     serializer_class = RideSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def perform_update(self, serializer):
         ride = self.get_object()
-        if self.request.user == ride.driver or self.request.user == ride.rider or self.request.user.is_superuser:
+        user = self.request.user
+        
+        # Permission logic:
+        # 1. Driver can update if assigned (requested) or accepted
+        # 2. Rider can update if they created it
+        # 3. Superuser can do anything
+        is_assigned_driver = ride.driver == user
+        is_creator = ride.rider == user
+        
+        if is_assigned_driver or is_creator or user.is_superuser:
             serializer.save()
         else:
             from rest_framework.exceptions import PermissionDenied
