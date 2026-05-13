@@ -1,4 +1,4 @@
-name: Bodaboda CI Pipeline
+name: Bodaboda CI/CD Pipeline
 
 on:
   push:
@@ -6,15 +6,12 @@ on:
       - main
 
 jobs:
-  test-and-build:
+
+  ci-test:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: bodaboda-app
-
     steps:
-    - name: Checkout Source Code
+    - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Setup Node.js
@@ -22,11 +19,43 @@ jobs:
       with:
         node-version: 20
 
-    - name: Install Dependencies
+    - name: Install dependencies
+      working-directory: bodaboda-app
       run: npm install
 
-    - name: Run Tests
+    - name: Run tests
+      working-directory: bodaboda-app
       run: npm test
 
-    - name: Build Docker Image
-      run: docker build -t bodaboda-app .
+    - name: Build app
+      working-directory: bodaboda-app
+      run: npm run build
+
+  docker-build:
+    needs: ci-test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: docker build -t bodaboda-app:v1 .
+
+  staging:
+    needs: docker-build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy to Staging
+      run: echo "Deploying to STAGING SERVER..."
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+
+    steps:
+    - name: Deploy to Production
+      run: echo "Deploying to PRODUCTION SERVER..."
