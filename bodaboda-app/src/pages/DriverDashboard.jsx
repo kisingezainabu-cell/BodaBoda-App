@@ -1,235 +1,421 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import api from '../api';
-import { MapPin, Navigation, DollarSign, Award, Target, Power, ChevronRight, Bell, X, History, Clock, User } from 'lucide-react';
+import MapComponent from '../components/MapComponent';
+import { 
+  Bike, 
+  MapPin, 
+  Navigation, 
+  Clock, 
+  CheckCircle, 
+  XCircle, 
+  Bell, 
+  History, 
+  LogOut, 
+  ChevronRight,
+  Circle,
+  TrendingUp,
+  DollarSign,
+  User,
+  Phone,
+  Star,
+  Search,
+  Wallet,
+  Calendar,
+  ArrowUpRight
+} from 'lucide-react';
 
 const DriverDashboard = () => {
-  const [isOnline, setIsOnline] = useState(false);
+  const { user, logout } = useAuth();
   const [availableRides, setAvailableRides] = useState([]);
   const [activeRide, setActiveRide] = useState(null);
-  const [tripHistory, setTripHistory] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [isOnline, setIsOnline] = useState(user?.is_online || false);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showNotification, setShowNotification] = useState(false);
-  const lastRidesCount = useRef(0);
-  const { user, logout } = useAuth();
 
   useEffect(() => {
-    if (user) {
-        fetchAvailableRides();
-        fetchTripHistory();
-        const interval = setInterval(fetchAvailableRides, 5000);
-        return () => clearInterval(interval);
-    }
-  }, [user]);
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [isOnline]);
 
-  const fetchAvailableRides = async () => {
+  const fetchData = async () => {
     try {
-      const rides = await api.getAvailableRides();
-      if (isOnline && rides.length > lastRidesCount.current && !activeRide) {
-          setShowNotification(true);
-          setTimeout(() => setShowNotification(false), 10000);
+      if (isOnline && !activeRide) {
+        const rides = await api.getAvailableRides();
+        setAvailableRides(rides);
+        
+        if (rides.length > availableRides.length) {
+            const newRide = rides[0];
+            setNotifications(prev => [{
+                id: Date.now(),
+                message: `New Request: ${newRide.pickup_location} to ${newRide.destination_location}`,
+                type: 'new_ride'
+            }, ...prev]);
+        }
       }
-      lastRidesCount.current = rides.length;
-      setAvailableRides(rides);
-    } catch (err) {
-      console.error("Failed to fetch rides", err);
-    } finally {
+      
+      const historyData = await api.getDriverHistory();
+      setHistory(historyData);
       setLoading(false);
-    }
-  };
-
-  const fetchTripHistory = async () => {
-    try {
-      const data = await api.getDriverHistory();
-      setTripHistory(data);
     } catch (err) {
-      console.error("Failed to fetch history", err);
+      console.error("Failed to fetch data", err);
     }
   };
 
-  const handleAcceptRide = async (rideId) => {
+  const toggleOnline = async () => {
+    try {
+      const newStatus = !isOnline;
+      await api.updateProfile({ is_online: newStatus });
+      setIsOnline(newStatus);
+      if (!newStatus) setAvailableRides([]);
+    } catch (err) {
+      alert("Failed to update status");
+    }
+  };
+
+  const acceptRide = async (rideId) => {
     try {
       const ride = await api.acceptRide(rideId);
       setActiveRide(ride);
-      setShowNotification(false);
-      fetchAvailableRides();
+      setAvailableRides([]);
+      setNotifications(prev => [{
+          id: Date.now(),
+          message: "Trip Accepted! Navigate to pickup.",
+          type: 'success'
+      }, ...prev]);
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const handleUpdateStatus = async (newStatus) => {
+  const rejectRide = async (rideId) => {
     try {
-      const updatedRide = await api.updateStatus(activeRide.id, newStatus);
-      setActiveRide(updatedRide);
-      if (newStatus === 'completed') {
-          setActiveRide(null);
-          fetchTripHistory(); // Refresh history after completion
+      await api.updateStatus(rideId, 'cancelled');
+      setAvailableRides(prev => prev.filter(r => r.id !== rideId));
+      setNotifications(prev => [{
+          id: Date.now(),
+          message: "Request declined.",
+          type: 'info'
+      }, ...prev]);
+    } catch (err) {
+      alert("Failed to reject request");
+    }
+  };
+
+  const updateStatus = async (status) => {
+    try {
+      const updated = await api.updateStatus(activeRide.id, status);
+      setActiveRide(updated);
+      if (status === 'completed') {
+        setActiveRide(null);
+        fetchData();
       }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  return (
-    <div className="flex-grow bg-slate-50 min-h-screen pb-20 font-sans text-slate-900">
-      {/* Notification Bar */}
-      {isOnline && showNotification && availableRides.length > 0 && (
-          <div className="bg-orange-500 text-white py-3 px-4 shadow-lg animate-bounce sticky top-16 z-40">
-              <div className="max-w-6xl mx-auto flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                      <Bell size={20} className="animate-ring" />
-                      <p className="font-bold text-sm">New Ride Request: {availableRides[0].pickup_location} → {availableRides[0].destination_location}</p>
-                  </div>
-                  <button onClick={() => setShowNotification(false)}><X size={20} /></button>
-              </div>
-          </div>
-      )}
+  const getMarkers = () => {
+      if (activeRide) {
+          return [
+              { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng, type: 'passenger', label: 'Pickup', subLabel: activeRide.guest_name || activeRide.rider_details?.full_name },
+              { lat: activeRide.destination_lat, lng: activeRide.destination_lng, type: 'destination', label: 'Drop-off', subLabel: activeRide.destination_location }
+          ];
+      }
+      
+      if (availableRides.length > 0) {
+          return availableRides.map(r => ({
+              lat: r.pickup_lat,
+              lng: r.pickup_lng,
+              type: 'passenger',
+              label: `Request: TSh ${r.price}`,
+              subLabel: r.pickup_location
+          }));
+      }
 
-      <div className={`transition-colors duration-500 ${isOnline ? 'bg-emerald-700' : 'bg-slate-900'} py-12`}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-8 text-white">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Rider Portal: {user?.full_name || user?.username}</h1>
-            <p className="text-white/60 font-medium">{user?.vehicle_make} • {user?.license_plate}</p>
+      return [];
+  };
+
+  const totalEarnings = history.reduce((acc, r) => acc + parseFloat(r.price), 0);
+  const todayTrips = history.filter(r => new Date(r.created_at).toDateString() === new Date().toDateString()).length;
+
+  return (
+    <div className="flex-grow bg-[#f8fafc] min-h-screen pb-20 font-sans">
+      {/* Premium Header with Dynamic Gradient */}
+      <div className="bg-[#0f172a] pt-12 pb-32 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/20 rounded-full -mr-64 -mt-64 blur-[100px] animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/20 rounded-full -ml-32 -mb-32 blur-[80px]"></div>
+        
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+            <div className="flex items-center gap-6">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-[32px] bg-grad-emerald flex items-center justify-center text-white text-4xl font-black shadow-2xl border-4 border-white/10 overflow-hidden">
+                    {user?.username?.[0].toUpperCase()}
+                </div>
+                <div className={`absolute -bottom-1 -right-1 w-8 h-8 rounded-full border-4 border-[#0f172a] ${isOnline ? 'bg-emerald-500' : 'bg-slate-500'} shadow-lg`}></div>
+              </div>
+              <div>
+                <h1 className="text-4xl font-black text-white tracking-tight mb-2">Hello, {user?.full_name || user?.username}!</h1>
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="flex items-center gap-2 px-4 py-1.5 rounded-2xl bg-white/5 text-emerald-400 text-xs font-black uppercase tracking-widest border border-white/10 backdrop-blur-md">
+                    <Star size={14} className="fill-emerald-400" /> 4.9 Rating
+                  </span>
+                  <span className="text-slate-400 text-sm font-bold opacity-60">Dodoma Partner ID: #BD-{user?.id}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4 w-full lg:w-auto">
+                <button 
+                    onClick={toggleOnline}
+                    className={`flex-1 lg:flex-none flex items-center justify-center gap-4 px-10 py-5 rounded-[28px] font-black text-sm uppercase tracking-widest transition-all duration-500 shadow-2xl ${
+                    isOnline 
+                    ? 'bg-emerald-600 text-white shadow-emerald-600/40 hover:bg-emerald-500 scale-105' 
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
+                    }`}
+                >
+                    <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-white animate-pulse' : 'bg-slate-600'}`}></div>
+                    {isOnline ? 'You are Live' : 'Go Online'}
+                </button>
+                <button onClick={logout} className="p-5 rounded-[28px] bg-slate-800 text-slate-400 border border-slate-700 hover:bg-red-500 hover:text-white transition-all shadow-xl">
+                    <LogOut size={24} />
+                </button>
+            </div>
           </div>
-          <button 
-            onClick={() => setIsOnline(!isOnline)}
-            className={`flex items-center gap-3 px-10 py-5 rounded-2xl font-bold text-xl shadow-2xl transition-all active:scale-95 ${
-              isOnline ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white'
-            }`}
-          >
-            <Power size={24} />
-            {isOnline ? 'GO OFFLINE' : 'GO ONLINE'}
-          </button>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-1 space-y-6">
-                <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-xl">
-                    <DollarSign size={24} className="text-emerald-500 mb-4" />
-                    <p className="text-3xl font-bold">TSh {tripHistory.reduce((acc, curr) => acc + parseInt(curr.price), 0).toLocaleString()}</p>
-                    <p className="text-xs font-bold uppercase tracking-widest opacity-50 mt-1">Total Earnings</p>
-                </div>
-                <div className="bg-white p-6 rounded-3xl border border-slate-200">
-                    <div className="flex items-center gap-4 mb-4">
-                        <History className="text-blue-500" />
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase">Trips Completed</p>
-                            <p className="font-bold text-slate-900">{tripHistory.length}</p>
+          
+          {/* Earnings Card - HIGH CONTRAST & PREMIUM */}
+          <div className="lg:col-span-1 space-y-8">
+            <div className="bg-white rounded-[40px] shadow-premium p-10 border border-slate-100 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 bg-emerald-50 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+                <div className="relative z-10">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center text-white mb-8 shadow-xl shadow-emerald-600/20">
+                        <Wallet size={32} />
+                    </div>
+                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-[3px] mb-2">Total Earnings</p>
+                    <div className="flex items-baseline gap-2 mb-8">
+                        <span className="text-sm font-black text-slate-900 opacity-40">TSh</span>
+                        <h2 className="text-4xl font-black text-slate-900 tracking-tight">{totalEarnings.toLocaleString()}</h2>
+                    </div>
+                    
+                    <div className="space-y-4 pt-8 border-t border-slate-100">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                <p className="text-xs font-bold text-slate-500">Daily Goal</p>
+                            </div>
+                            <p className="text-xs font-black text-slate-900">75%</p>
                         </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="w-[75%] h-full bg-emerald-500 rounded-full"></div>
+                        </div>
+                        <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                            <TrendingUp size={12} /> +12% from yesterday
+                        </p>
                     </div>
                 </div>
-                <button onClick={logout} className="w-full py-4 text-red-500 font-bold border border-red-100 rounded-2xl hover:bg-red-50 transition-all">Logout</button>
             </div>
 
-            <div className="lg:col-span-3 space-y-10">
-                {activeRide ? (
-                    <div className="bg-white rounded-3xl border-2 border-emerald-500 p-8 shadow-2xl animate-fade-in">
-                        <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Navigation className="text-emerald-500" /> Active Trip</h2>
-                        <div className="grid md:grid-cols-2 gap-10">
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Customer</p>
-                                <p className="text-2xl font-bold text-slate-900 mb-1">{activeRide.rider_details?.full_name || activeRide.rider_details?.username}</p>
-                                <p className="text-slate-500 font-bold mb-6">{activeRide.rider_details?.phone_number}</p>
-                                <div className="space-y-4">
-                                    <div className="flex gap-4">
-                                        <div className="w-px bg-slate-200 h-10 relative"><div className="absolute top-0 -left-1 w-2 h-2 rounded-full bg-emerald-500"></div></div>
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Pickup</p><p className="font-bold text-slate-900">{activeRide.pickup_location}</p></div>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <div className="w-px bg-slate-200 h-10 relative"><div className="absolute top-0 -left-1 w-2 h-2 rounded-full bg-blue-500"></div></div>
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Destination</p><p className="font-bold text-slate-900">{activeRide.destination_location}</p></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 rounded-3xl p-8 text-center border border-slate-100">
-                                <p className="text-xs font-bold text-slate-400 uppercase mb-2">Price</p>
-                                <p className="text-4xl font-bold text-slate-900 mb-8">TSh {activeRide.price}</p>
-                                {activeRide.status === 'accepted' ? (
-                                    <button onClick={() => handleUpdateStatus('started')} className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg">START TRIP</button>
-                                ) : (
-                                    <button onClick={() => handleUpdateStatus('completed')} className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg">COMPLETE TRIP</button>
-                                )}
-                            </div>
+            <div className="bg-grad-dark rounded-[40px] shadow-2xl p-8 text-white relative overflow-hidden">
+                <div className="relative z-10">
+                    <h4 className="text-xs font-black text-white/40 uppercase tracking-[2px] mb-6">Activity Hub</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white/5 rounded-3xl p-5 border border-white/5">
+                            <p className="text-3xl font-black mb-1">{todayTrips}</p>
+                            <p className="text-[10px] font-bold text-white/40 uppercase">Trips Today</p>
+                        </div>
+                        <div className="bg-white/5 rounded-3xl p-5 border border-white/5">
+                            <p className="text-3xl font-black mb-1">4.2</p>
+                            <p className="text-[10px] font-bold text-white/40 uppercase">Hours Active</p>
                         </div>
                     </div>
-                ) : isOnline ? (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-slate-900">Available Requests</h2>
-                        {availableRides.length === 0 ? (
-                            <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-20 text-center">
-                                <p className="text-slate-400 font-bold">Scanning for customers...</p>
-                            </div>
-                        ) : (
-                            <div className="grid md:grid-cols-2 gap-6">
-                                {availableRides.map(ride => (
-                                    <div key={ride.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                                        <div className="flex justify-between mb-4">
-                                            <p className="font-bold text-lg text-slate-900">TSh {ride.price}</p>
-                                            <span className="text-[10px] font-black uppercase text-emerald-600">New Request</span>
-                                        </div>
-                                        <p className="text-sm text-slate-600 mb-4">{ride.pickup_location} → {ride.destination_location}</p>
-                                        <button onClick={() => handleAcceptRide(ride.id)} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold">Accept Trip</button>
-                                    </div>
-                                ))}
+                </div>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="lg:col-span-3 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Live Map with Premium Frame */}
+                <div className="bg-white rounded-[40px] shadow-premium border border-slate-200 overflow-hidden h-[500px] relative">
+                    <MapComponent markers={getMarkers()} />
+                    <div className="absolute top-6 left-6 right-6 bg-slate-900/80 backdrop-blur-xl p-4 rounded-3xl border border-white/10 z-[1000] flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]' : 'bg-red-500'}`}></div>
+                            <p className="text-white text-[10px] font-black uppercase tracking-widest">
+                                {isOnline ? 'Live in Dodoma' : 'Tracking Offline'}
+                            </p>
+                        </div>
+                        {availableRides.length > 0 && (
+                            <div className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-full shadow-lg">
+                                {availableRides.length} REQUESTS
                             </div>
                         )}
                     </div>
-                ) : (
-                    <div className="bg-white rounded-3xl border border-slate-200 p-24 text-center">
-                        <h3 className="text-2xl font-bold text-slate-900 mb-4">You are Offline</h3>
-                        <button onClick={() => setIsOnline(true)} className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-bold">Go Online</button>
-                    </div>
-                )}
+                </div>
 
-                {/* Trip History Section */}
-                <div className="pt-10 border-t border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-900 mb-8 flex items-center gap-3"><History className="text-slate-400" /> Completed Journey History</h2>
-                    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-100">
-                                        <th className="px-8 py-4">Passenger Name</th>
-                                        <th className="px-8 py-4">Route</th>
-                                        <th className="px-8 py-4">Time Completed</th>
-                                        <th className="px-8 py-4 text-right">Payment</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {tripHistory.length === 0 ? (
-                                        <tr><td colSpan="4" className="px-8 py-12 text-center text-slate-400 font-medium">No completed journeys yet.</td></tr>
-                                    ) : (
-                                        tripHistory.map(trip => (
-                                            <tr key={trip.id} className="hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-8 py-5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500"><User size={14} /></div>
-                                                        <p className="font-bold text-slate-900 text-sm">{trip.rider_details?.full_name || trip.rider_details?.username}</p>
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-5">
-                                                    <p className="text-xs font-bold text-slate-900 truncate max-w-[200px]">{trip.pickup_location} → {trip.destination_location}</p>
-                                                </td>
-                                                <td className="px-8 py-5">
-                                                    <div className="flex items-center gap-2 text-slate-500 text-xs">
-                                                        <Clock size={12} /> {new Date(trip.updated_at).toLocaleString()}
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-5 text-right">
-                                                    <p className="font-bold text-emerald-600 text-sm">TSh {trip.price}</p>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                {/* Status and Notifications */}
+                <div className="space-y-8">
+                    {activeRide ? (
+                        <div className="bg-white rounded-[40px] shadow-2xl border-4 border-emerald-500 p-10 animate-fade-in relative overflow-hidden h-full flex flex-col">
+                            <div className="absolute top-0 right-0 p-8 text-emerald-50 opacity-20 transform translate-x-1/4 -translate-y-1/4"><Bike size={200} /></div>
+                            <div className="relative z-10 flex-grow">
+                                <div className="flex justify-between items-start mb-8">
+                                    <div>
+                                        <span className="px-4 py-2 rounded-2xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">Current Trip</span>
+                                        <h3 className="text-3xl font-black text-slate-900 mt-6 tracking-tight">On the Road</h3>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Trip Value</p>
+                                        <p className="text-3xl font-black text-emerald-600">TSh {activeRide.price}</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8 mb-10">
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm"><MapPin className="text-emerald-500" size={24} /></div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup</p>
+                                            <p className="font-bold text-slate-900 text-lg line-clamp-1">{activeRide.pickup_location}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm"><Navigation className="text-blue-500" size={24} /></div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Drop-off</p>
+                                            <p className="font-bold text-slate-900 text-lg line-clamp-1">{activeRide.destination_location}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 mb-8 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center font-black text-slate-400 shadow-sm">
+                                            {(activeRide.guest_name || activeRide.rider_details?.username)?.[0].toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-black text-slate-900">{activeRide.guest_name || activeRide.rider_details?.full_name}</p>
+                                            <p className="text-xs font-bold text-slate-400">Guest Passenger</p>
+                                        </div>
+                                    </div>
+                                    <button className="p-4 bg-white rounded-2xl text-emerald-600 shadow-sm border border-slate-100 hover:bg-emerald-50 transition-all"><Phone size={20} /></button>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 relative z-10">
+                                {activeRide.status === 'accepted' && (
+                                    <button onClick={() => updateStatus('started')} className="flex-1 py-6 bg-slate-900 text-white rounded-[24px] font-black uppercase tracking-widest text-sm shadow-2xl hover:bg-black transition-all">Start Journey</button>
+                                )}
+                                {activeRide.status === 'started' && (
+                                    <button onClick={() => updateStatus('completed')} className="flex-1 py-6 bg-emerald-600 text-white rounded-[24px] font-black uppercase tracking-widest text-sm shadow-2xl shadow-emerald-600/30 hover:bg-emerald-700 transition-all">Complete Trip</button>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="bg-white rounded-[40px] shadow-premium p-10 border border-slate-100 h-full flex flex-col">
+                            <div className="flex justify-between items-center mb-10">
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Trip Offers</h3>
+                                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-full border border-emerald-100">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className="text-[10px] font-black text-emerald-700 uppercase">Searching</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex-grow overflow-y-auto pr-2 space-y-6">
+                                {!isOnline ? (
+                                    <div className="py-20 text-center">
+                                        <div className="w-24 h-24 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-6"><Bell size={40} /></div>
+                                        <h4 className="text-xl font-bold text-slate-300">Offline Mode</h4>
+                                        <p className="text-slate-400 text-sm mt-2">Go online to see ride requests.</p>
+                                    </div>
+                                ) : availableRides.length === 0 ? (
+                                    <div className="py-20 text-center">
+                                        <div className="w-24 h-24 bg-emerald-50 text-emerald-200 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce"><Search size={40} /></div>
+                                        <h4 className="text-xl font-bold text-slate-900">Waiting for Passenger...</h4>
+                                        <p className="text-slate-500 text-sm mt-2 px-8">Stay near central Dodoma for higher chances of getting matched.</p>
+                                    </div>
+                                ) : (
+                                    availableRides.map(ride => (
+                                        <div key={ride.id} className="bg-slate-50 rounded-[32px] p-8 border border-slate-100 hover:border-emerald-300 hover:bg-white hover:shadow-2xl transition-all group relative animate-fade-in">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">New Offer</p>
+                                                    <p className="text-2xl font-black text-emerald-600">TSh {ride.price}</p>
+                                                </div>
+                                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 border border-slate-200 shadow-sm"><ArrowUpRight size={24} /></div>
+                                            </div>
+                                            <div className="space-y-4 mb-8">
+                                                <div className="flex gap-4">
+                                                    <div className="w-1 h-1 rounded-full bg-emerald-500 mt-2"></div>
+                                                    <p className="text-sm font-bold text-slate-700">{ride.pickup_location}</p>
+                                                </div>
+                                                <div className="flex gap-4">
+                                                    <div className="w-1 h-1 rounded-full bg-blue-500 mt-2"></div>
+                                                    <p className="text-sm font-bold text-slate-700">{ride.destination_location}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <button 
+                                                    onClick={() => acceptRide(ride.id)} 
+                                                    className="flex-1 py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase tracking-widest text-sm hover:bg-black shadow-xl transition-all"
+                                                >
+                                                    Accept
+                                                </button>
+                                                <button 
+                                                    onClick={() => rejectRide(ride.id)} 
+                                                    className="px-6 py-5 bg-white border border-slate-200 text-slate-400 rounded-[24px] font-black uppercase tracking-widest text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all"
+                                                >
+                                                    Decline
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* Recent History Grid */}
+            <div className="bg-white rounded-[40px] shadow-premium p-10 border border-slate-100">
+                <div className="flex justify-between items-center mb-10">
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Recent Journey History</h3>
+                    <div className="flex items-center gap-4">
+                        <button className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-all"><Calendar size={20} /></button>
+                        <button className="text-sm font-black text-emerald-600 hover:underline uppercase tracking-widest">See All</button>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {history.slice(0, 6).map(ride => (
+                        <div key={ride.id} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 flex items-center gap-5 hover:bg-white hover:shadow-xl hover:border-emerald-100 transition-all group">
+                            <div className="w-14 h-14 bg-white rounded-2xl border border-slate-200 flex items-center justify-center font-black text-slate-400 group-hover:text-emerald-600 transition-colors shadow-sm">
+                                {ride.id}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="font-bold text-slate-900 truncate mb-1">{ride.destination_location}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase">{new Date(ride.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                    <span className="text-[10px] font-black text-emerald-600 uppercase">Paid</span>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm font-black text-slate-900">+{ride.price}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
