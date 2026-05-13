@@ -74,6 +74,23 @@ class RideAcceptView(APIView):
         
         return Response(RideSerializer(ride).data)
 
+class RideRejectView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            ride = Ride.objects.get(pk=pk, status='requested')
+        except Ride.DoesNotExist:
+            return Response({'error': 'Ride not available or already processed'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.user != ride.driver and not request.user.is_superuser:
+            return Response({'error': 'You do not have permission to reject this ride'}, status=status.HTTP_403_FORBIDDEN)
+
+        ride.status = 'cancelled'
+        ride.save()
+        
+        return Response(RideSerializer(ride).data)
+
 class RideDetailView(generics.RetrieveUpdateAPIView):
     queryset = Ride.objects.all()
     serializer_class = RideSerializer

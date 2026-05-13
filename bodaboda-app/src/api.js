@@ -95,6 +95,12 @@ class BodaBodaAPI {
         });
     }
 
+    async rejectRide(rideId) {
+        return await this.request(`/rides/${rideId}/reject`, {
+            method: 'POST'
+        });
+    }
+
     async getRideDetail(rideId) {
         return await this.request(`/rides/${rideId}`);
     }

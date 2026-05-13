@@ -92,7 +92,7 @@ const DriverDashboard = () => {
 
   const rejectRide = async (rideId) => {
     try {
-      await api.updateStatus(rideId, 'cancelled');
+      await api.rejectRide(rideId);
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
       setNotifications(prev => [{
           id: Date.now(),
@@ -100,7 +100,8 @@ const DriverDashboard = () => {
           type: 'info'
       }, ...prev]);
     } catch (err) {
-      alert("Failed to reject request");
+      console.error("Reject error:", err);
+      alert("Failed to reject request: " + err.message);
     }
   };
 
