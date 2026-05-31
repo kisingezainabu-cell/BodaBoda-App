@@ -7,6 +7,16 @@ from .serializers import UserSerializer, LoginSerializer
 
 User = get_user_model()
 
+
+class IsAdminOrSuperuser(permissions.BasePermission):
+    """Allow access to admin users (is_staff) or superusers."""
+    def has_permission(self, request, view):
+        return bool(
+            request.user and 
+            request.user.is_authenticated and 
+            (request.user.is_staff or request.user.is_superuser)
+        )
+
 class RegisterView(APIView):
     permission_classes = (permissions.AllowAny,)
 
@@ -71,7 +81,7 @@ class OnlineDriversView(generics.ListAPIView):
         return User.objects.filter(user_type='driver', is_online=True)
 
 class UserManagementView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrSuperuser]
 
     def get(self, request):
         users = User.objects.all().order_by('-date_joined')
@@ -79,7 +89,7 @@ class UserManagementView(APIView):
         return Response(serializer.data)
 
 class UserDeleteView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminOrSuperuser]
 
     def delete(self, request, pk):
         try:

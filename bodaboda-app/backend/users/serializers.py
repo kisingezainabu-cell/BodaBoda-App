@@ -11,7 +11,8 @@ class UserSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'username', 'email', 'password', 'user_type', 
             'full_name', 'phone_number', 'vehicle_make', 
-            'vehicle_model', 'license_plate', 'is_superuser'
+            'vehicle_model', 'license_plate', 'is_superuser',
+            'is_online', 'current_lat', 'current_lng'
         )
 
     def create(self, validated_data):

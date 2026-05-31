@@ -9,6 +9,8 @@ services:
       - "3002:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring-config/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring-config/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123
@@ -35,6 +37,16 @@ services:
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+    networks:
+      - bodaboda-network
+
+  # Blackbox Exporter - Frontend Uptime & Latency
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - "9115:9115"
     restart: unless-stopped
     networks:
       - bodaboda-network

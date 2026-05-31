@@ -311,12 +311,14 @@ class BodaBodaDatabaseHandler(BaseHTTPRequestHandler):
                     else:
                         self.send_json_response({'error': 'Ride not found'}, 404)
             
-            except Exception as e:
-                print(f"GET Error: {e}")
-                self.send_json_response({'error': str(e)}, 500)
-            finally:
-                if conn:
-                    conn.close()
+            else:
+                self.send_json_response({'error': 'Path not found'}, 404)
+        except Exception as e:
+            print(f"GET Error: {e}")
+            self.send_json_response({'error': str(e)}, 500)
+        finally:
+            if conn:
+                conn.close()
     
     def do_POST(self):
         """Handle POST requests"""
@@ -444,44 +446,7 @@ class BodaBodaDatabaseHandler(BaseHTTPRequestHandler):
                     'estimated_distance': distance
                 })
             else:
-                self.send_json_response({'error': 'Invalid credentials'}, 401)
-        
-        elif self.path == '/api/rides/request':
-            required_fields = ['rider_id', 'pickup_latitude', 'pickup_longitude', 
-                           'pickup_address', 'destination_latitude', 'destination_longitude', 'destination_address']
-            if not all(field in data for field in required_fields):
-                self.send_json_response({'error': 'Missing required fields'}, 400)
-                return
-            
-            # Calculate fare
-            fare, distance = self.calculate_fare(
-                data['pickup_latitude'], data['pickup_longitude'],
-                data['destination_latitude'], data['destination_longitude']
-            )
-            
-            cursor.execute('''
-                INSERT INTO ride_requests 
-                (rider_id, pickup_latitude, pickup_longitude, pickup_address,
-                 destination_latitude, destination_longitude, destination_address, estimated_fare)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (data['rider_id'], data['pickup_latitude'], data['pickup_longitude'],
-                   data['pickup_address'], data['destination_latitude'], data['destination_longitude'],
-                   data['destination_address'], fare))
-            
-            ride_request_id = cursor.fetchone()['id']
-            conn.commit()
-            
-            self.send_json_response({
-                'message': 'Ride requested successfully',
-                'ride_request_id': ride_request_id,
-                'estimated_fare': fare,
-                'estimated_distance': distance
-            })
-        
-        else:
-            self.send_json_response({'error': 'Endpoint not found'}, 404)
-        
+                self.send_json_response({'error': 'Endpoint not found'}, 404)
         except Exception as e:
             print(f"POST Error: {e}")
             self.send_json_response({'error': str(e)}, 500)

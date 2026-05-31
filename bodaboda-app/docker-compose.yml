@@ -14,6 +14,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - bodaboda-network
 
   backend:
     build: ./backend
@@ -35,6 +37,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - bodaboda-network
 
   frontend:
     build: ./frontend
@@ -42,6 +46,12 @@ services:
       - "8080:80"
     depends_on:
       - backend
+    networks:
+      - bodaboda-network
 
 volumes:
   postgres_data:
+
+networks:
+  bodaboda-network:
+    external: true
