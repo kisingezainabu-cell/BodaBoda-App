@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "echo \"No tests specified yet\" && exit 0",
+    "test": "npm run test:backend",
+    "test:backend": "cd backend && DJANGO_USE_SQLITE=True MQTT_ENABLED=False sh -c 'if [ -x ./venv/bin/python ]; then ./venv/bin/python manage.py test; else python manage.py test; fi'",
+    "test:mqtt": "python3 tests/mqtt_smoke_test.py",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up frontend backend",
     "docker:up:frontend": "docker-compose up frontend",
@@ -16,6 +18,7 @@
     "docker:down": "docker-compose down"
   },
   "dependencies": {
+    "mqtt": "^5.14.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
