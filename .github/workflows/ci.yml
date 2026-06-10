@@ -167,7 +167,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
           source: "bodaboda-app/docker-compose.registry.yml,bodaboda-app/mosquitto/mosquitto.conf"
-          target: "/opt"
+          target: "/opt/bodaboda-app"
           strip_components: 1
 
       - name: Deploy staging on EC2
@@ -225,7 +225,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT || 22 }}
           source: "bodaboda-app/docker-compose.registry.yml,bodaboda-app/mosquitto/mosquitto.conf"
-          target: "/opt"
+          target: "/opt/bodaboda-app"
           strip_components: 1
 
       - name: Deploy production on EC2
