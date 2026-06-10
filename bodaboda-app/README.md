@@ -199,6 +199,144 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## MQTT Integration
+
+### Feature Implemented
+- Ride Request Broadcasting
+- Ride Status Updates
+
+When a passenger requests a ride, the Django backend publishes an MQTT event immediately. When a driver accepts, cancels, starts, or completes a ride, the backend publishes a ride status event to a second MQTT topic.
+
+### Topics Used
+- `bodaboda/ride/request`
+- `bodaboda/ride/status`
+
+### Message Format
+
+Ride request event:
+
+```json
+{
+  "event": "ride.requested",
+  "ride_id": 12,
+  "rider_id": 4,
+  "driver_id": 9,
+  "pickup_location": "Nyerere Square",
+  "destination_location": "UDOM Hostels",
+  "price": "3500.00",
+  "status": "requested"
+}
+```
+
+Ride status event:
+
+```json
+{
+  "event": "ride.accepted",
+  "ride_id": 12,
+  "rider_id": 4,
+  "driver_id": 9,
+  "status": "accepted"
+}
+```
+
+### How It Works
+- Passenger sends `POST /api/rides/request`
+- Backend saves the ride and publishes to `bodaboda/ride/request`
+- Driver subscriber receives the request instantly through MQTT
+- When ride status changes, backend publishes to `bodaboda/ride/status`
+- Passenger or monitoring subscriber receives the status update instantly
+
+### Demo Commands
+
+Start the broker with Docker Compose:
+
+```bash
+docker compose up -d mqtt
+```
+
+Start a subscriber:
+
+```bash
+cd backend
+source venv/bin/activate
+python manage.py mqtt_subscribe --topic bodaboda/ride/#
+```
+
+Publish a demo message manually:
+
+```bash
+cd backend
+source venv/bin/activate
+python manage.py mqtt_publish_demo \
+  --topic bodaboda/ride/request \
+  --message '{"event":"ride.requested","ride_id":99,"pickup_location":"Nyerere Square","destination_location":"UDOM"}'
+```
+
+Run automated tests:
+
+```bash
+npm test
+python tests/mqtt_smoke_test.py
+```
+
+## Third-Party Deployment Integration
+
+### Platform Used
+- Docker Hub for third-party image registry
+- Docker Compose deployment from pulled registry images
+
+### Pipeline Flow
+- Build application
+- Run Django tests
+- Run MQTT publish/receive smoke test
+- Build backend and frontend Docker images
+- Push images to Docker Hub with:
+  - `latest`
+  - commit SHA tag
+- Pull those same images back from Docker Hub
+- Deploy them with `docker-compose.registry.yml`
+- Verify MQTT still works after deployment
+
+### Required GitHub Secrets
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+### Registry Deployment File
+- [docker-compose.registry.yml](/home/dawilly/Desktop/KSG/bodaboda-app/docker-compose.registry.yml:1)
+
+It deploys:
+- PostgreSQL
+- Mosquitto
+- Backend image pulled from Docker Hub
+- Frontend image pulled from Docker Hub
+
+### EC2 Auto-Deploy Notes
+- The GitHub Actions workflow now creates `/opt/bodaboda-app` automatically on EC2 if it does not exist.
+- It copies:
+  - `docker-compose.registry.yml`
+  - `mosquitto/mosquitto.conf`
+- Then it logs in to Docker Hub over SSH and runs the deployment on the EC2 server.
+
+### No-Domain Production Access
+- Production app: `http://EC2_PUBLIC_IP:8080`
+- Grafana: `http://EC2_PUBLIC_IP:3002`
+- Prometheus: `http://EC2_PUBLIC_IP:9090`
+
+The production frontend uses same-origin routing:
+- API calls go to `/api`
+- MQTT websocket goes to `/mqtt`
+
+Nginx inside the frontend container proxies those requests to the backend and Mosquitto containers, so browser users do not need direct public access to backend or MQTT ports.
+
+### Hosted MQTT Broker Support
+The app can also use a third-party hosted broker by overriding:
+- `MQTT_BROKER_HOST`
+- `MQTT_BROKER_PORT`
+- `MQTT_TOPIC_PREFIX`
+
+This means you can switch from local Mosquitto to HiveMQ Cloud or another hosted broker without changing application code.
+
 ### Database Migrations
 ```bash
 cd backend
