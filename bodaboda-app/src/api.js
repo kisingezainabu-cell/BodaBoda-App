@@ -37,17 +37,22 @@ class BodaBodaAPI {
 
         try {
             const response = await fetch(url, config);
-            const data = await response.json();
+            const contentType = response.headers.get('content-type') || '';
+            const isJson = contentType.includes('application/json');
+            const data = isJson ? await response.json() : await response.text();
 
             if (!response.ok) {
                 // Handle Django validation errors which often come as a dictionary
-                if (typeof data === 'object') {
+                if (isJson && typeof data === 'object') {
                     const errorMessages = Object.entries(data)
                         .map(([key, value]) => `${key}: ${value}`)
                         .join(', ');
                     throw new Error(errorMessages || 'API request failed');
                 }
-                throw new Error(data.error || data.detail || 'API request failed');
+                if (isJson) {
+                    throw new Error(data.error || data.detail || 'API request failed');
+                }
+                throw new Error(`Server error (${response.status}). Check backend logs.`);
             }
 
             return data;
