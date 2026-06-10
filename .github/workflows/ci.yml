@@ -1,62 +1,249 @@
-name: Bodaboda CI/CD Pipeline
+name: BodaBoda CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-
-  ci-test:
+  ci:
     runs-on: ubuntu-latest
+
+    services:
+      mqtt:
+        image: eclipse-mosquitto:2
+        ports:
+          - 1883:1883
+        options: >-
+          --health-cmd "sh -c 'exec 3<>/dev/tcp/127.0.0.1/1883'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: bodaboda-app
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      working-directory: bodaboda-app
-      run: npm install
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: bodaboda-app/package-lock.json
 
-    - name: Run tests
-      working-directory: bodaboda-app
-      run: npm test
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
 
-    - name: Build app
-      working-directory: bodaboda-app
-      run: npm run build
+      - name: Install frontend dependencies
+        run: npm ci
 
-  docker-build:
-    needs: ci-test
+      - name: Run Django tests
+        env:
+          DJANGO_USE_SQLITE: "True"
+          MQTT_ENABLED: "False"
+        run: python backend/manage.py test
+
+      - name: Run MQTT smoke test
+        env:
+          MQTT_BROKER_HOST: 127.0.0.1
+          MQTT_BROKER_PORT: 1883
+        run: python tests/mqtt_smoke_test.py
+
+      - name: Build Vite frontend
+        run: npm run build
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
+      - name: Build backend image
+        run: docker build -t bodaboda-backend:test ./backend
+
+      - name: Build frontend image
+        run: docker build -t bodaboda-frontend:test .
+
+  publish-dockerhub:
     runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name != 'pull_request'
+
+    defaults:
+      run:
+        working-directory: bodaboda-app
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Build Docker image
-      working-directory: bodaboda-app
-      run: docker build -t bodaboda-app:v1 .
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  staging:
-    needs: docker-build
+      - name: Build and push backend image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:${{ env.IMAGE_TAG }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:latest \
+            ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:${{ env.IMAGE_TAG }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:${{ env.IMAGE_TAG }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:latest \
+            .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:${{ env.IMAGE_TAG }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:latest
+
+      - name: Confirm published tags
+        run: |
+          echo "Published backend tags:"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:${{ env.IMAGE_TAG }}"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-backend:latest"
+          echo "Published frontend tags:"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:${{ env.IMAGE_TAG }}"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/bodaboda-frontend:latest"
+
+  deploy-staging:
     runs-on: ubuntu-latest
+    needs: publish-dockerhub
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment:
+      name: staging
 
     steps:
-    - name: Deploy to Staging
-      run: echo "Deploying to STAGING SERVER..."
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  production:
-    needs: staging
+      - name: Prepare deployment directory on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script: |
+            set -e
+            sudo mkdir -p /opt/bodaboda-app/mosquitto
+            sudo chown -R $USER:$USER /opt/bodaboda-app
+
+      - name: Copy deployment files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          source: "bodaboda-app/docker-compose.registry.yml,bodaboda-app/mosquitto/mosquitto.conf"
+          target: "/opt"
+          strip_components: 1
+
+      - name: Deploy staging on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          COMPOSE_PROJECT_NAME: bodaboda-staging
+          FRONTEND_PORT: "8081"
+          DB_NAME: bodaboda_db
+          DB_USER: bodaboda
+          DB_PASSWORD: password123
+          DEBUG: "True"
+          SECRET_KEY: django-insecure-bodaboda-app-key-123456789
+          MQTT_ENABLED: "True"
+          MQTT_BROKER_HOST: mqtt
+          MQTT_BROKER_PORT: "1883"
+          MQTT_TOPIC_PREFIX: bodaboda
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE_TAG,COMPOSE_PROJECT_NAME,FRONTEND_PORT,DB_NAME,DB_USER,DB_PASSWORD,DEBUG,SECRET_KEY,MQTT_ENABLED,MQTT_BROKER_HOST,MQTT_BROKER_PORT,MQTT_TOPIC_PREFIX
+          script: |
+            set -e
+            cd /opt/bodaboda-app
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            docker compose -f docker-compose.registry.yml pull
+            docker compose -f docker-compose.registry.yml up -d
+            docker compose -f docker-compose.registry.yml ps
+
+      - name: Verify staging HTTP entrypoint on EC2
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.EC2_HOST }}:8081 || exit 1
+
+  deploy-production:
     runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment:
       name: production
 
     steps:
-    - name: Deploy to Production
-      run: echo "Deploying to PRODUCTION SERVER..."
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy deployment files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          source: "bodaboda-app/docker-compose.registry.yml,bodaboda-app/mosquitto/mosquitto.conf"
+          target: "/opt"
+          strip_components: 1
+
+      - name: Deploy production on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          COMPOSE_PROJECT_NAME: bodaboda-production
+          FRONTEND_PORT: "8080"
+          DB_NAME: bodaboda_db
+          DB_USER: bodaboda
+          DB_PASSWORD: password123
+          DEBUG: "True"
+          SECRET_KEY: django-insecure-bodaboda-app-key-123456789
+          MQTT_ENABLED: "True"
+          MQTT_BROKER_HOST: mqtt
+          MQTT_BROKER_PORT: "1883"
+          MQTT_TOPIC_PREFIX: bodaboda
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,IMAGE_TAG,COMPOSE_PROJECT_NAME,FRONTEND_PORT,DB_NAME,DB_USER,DB_PASSWORD,DEBUG,SECRET_KEY,MQTT_ENABLED,MQTT_BROKER_HOST,MQTT_BROKER_PORT,MQTT_TOPIC_PREFIX
+          script: |
+            set -e
+            cd /opt/bodaboda-app
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            docker compose -f docker-compose.registry.yml pull
+            docker compose -f docker-compose.registry.yml up -d
+            docker compose -f docker-compose.registry.yml ps
+
+      - name: Verify production HTTP entrypoint on EC2
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.EC2_HOST }}:8080 || exit 1
