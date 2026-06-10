@@ -13,17 +13,6 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
-    services:
-      mqtt:
-        image: eclipse-mosquitto:2
-        ports:
-          - 1883:1883
-        options: >-
-          --health-cmd "sh -c 'exec 3<>/dev/tcp/127.0.0.1/1883'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     defaults:
       run:
         working-directory: bodaboda-app
@@ -31,6 +20,33 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Start MQTT broker
+        run: |
+          docker run -d \
+            --name mqtt-broker \
+            -p 1883:1883 \
+            -v "$PWD/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro" \
+            eclipse-mosquitto:2
+
+      - name: Wait for MQTT broker
+        run: |
+          python - <<'PY'
+          import socket
+          import time
+          import sys
+
+          for _ in range(30):
+              try:
+                  with socket.create_connection(("127.0.0.1", 1883), timeout=2):
+                      print("MQTT broker is ready")
+                      sys.exit(0)
+              except OSError:
+                  time.sleep(2)
+
+          print("MQTT broker did not become ready in time")
+          sys.exit(1)
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
