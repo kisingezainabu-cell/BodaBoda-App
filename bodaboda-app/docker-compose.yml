@@ -17,6 +17,16 @@ services:
     networks:
       - bodaboda-network
 
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - bodaboda-network
+
   backend:
     build: ./backend
     command: >
@@ -34,14 +44,22 @@ services:
       - DB_PORT=5432
       - DEBUG=True
       - SECRET_KEY=django-insecure-bodaboda-app-key-123456789
+      - MQTT_ENABLED=True
+      - MQTT_BROKER_HOST=mqtt
+      - MQTT_BROKER_PORT=1883
+      - MQTT_TOPIC_PREFIX=bodaboda
     depends_on:
       db:
         condition: service_healthy
+      mqtt:
+        condition: service_started
     networks:
       - bodaboda-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:80"
     depends_on:
@@ -54,4 +72,4 @@ volumes:
 
 networks:
   bodaboda-network:
-    external: true
+    driver: bridge
