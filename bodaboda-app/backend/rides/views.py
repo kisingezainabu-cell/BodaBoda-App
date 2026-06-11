@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Ride
 from .serializers import RideSerializer
+from .mqtt import publish_message
 
 class RideRequestView(generics.CreateAPIView):
     serializer_class = RideSerializer
@@ -28,7 +29,7 @@ class RideRequestView(generics.CreateAPIView):
             User = get_user_model()
             try:
                 driver = User.objects.get(id=driver_id)
-                serializer.save(
+                ride = serializer.save(
                     rider=rider, 
                     driver=driver, 
                     status='requested',
@@ -40,9 +41,23 @@ class RideRequestView(generics.CreateAPIView):
                     destination_lng=d_lng
                 )
             except User.DoesNotExist:
-                serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
+                ride = serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
         else:
-            serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
+            ride = serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
+
+        # Publish MQTT message
+        publish_message("ride/requests", {
+            "ride_id": ride.id,
+            "status": ride.status,
+            "pickup": ride.pickup_location,
+            "destination": ride.destination_location,
+            "guest_name": ride.guest_name,
+            "guest_phone": ride.guest_phone,
+            "pickup_lat": ride.pickup_lat,
+            "pickup_lng": ride.pickup_lng,
+            "destination_lat": ride.destination_lat,
+            "destination_lng": ride.destination_lng,
+        })
 
 class AvailableRidesView(generics.ListAPIView):
     serializer_class = RideSerializer

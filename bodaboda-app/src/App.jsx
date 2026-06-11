@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import mqtt from 'mqtt';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import Navigation from './components/Navigation';
@@ -33,9 +34,55 @@ const ProtectedRoute = ({ children, role }) => {
 
 function AppContent() {
   const { user } = useAuth();
+  const [mqttMessage, setMqttMessage] = useState(null);
+
+  useEffect(() => {
+    // Only connect to MQTT if user is a driver (or for demonstration, anyone)
+    // Connecting to the MQTT broker over WebSockets
+    const client = mqtt.connect('ws://localhost:9002');
+
+    client.on('connect', () => {
+      console.log('Connected to MQTT Broker via WebSockets');
+      client.subscribe('ride/requests', (err) => {
+        if (!err) {
+          console.log('Successfully subscribed to ride/requests topic');
+        }
+      });
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic === 'ride/requests') {
+        const payload = JSON.parse(message.toString());
+        console.log('New Ride Request received via MQTT:', payload);
+        setMqttMessage(payload);
+        
+        // Auto hide notification after 10 seconds
+        setTimeout(() => setMqttMessage(null), 10000);
+      }
+    });
+
+    return () => {
+      if (client) client.end();
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col font-sans relative">
+      {mqttMessage && (
+        <div className="fixed top-20 right-4 z-50 bg-emerald-600 text-white p-4 rounded-lg shadow-xl border border-emerald-500 animate-bounce">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-full">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">New Ride Request!</h4>
+              <p className="text-sm opacity-90">Pickup: {mqttMessage.pickup}</p>
+              <p className="text-sm opacity-90">Dest: {mqttMessage.destination}</p>
+            </div>
+            <button onClick={() => setMqttMessage(null)} className="ml-4 text-white/70 hover:text-white">✕</button>
+          </div>
+        </div>
+      )}
       <Navigation />
       <main className="flex-grow flex flex-col">
         <Routes>

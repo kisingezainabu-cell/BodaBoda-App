@@ -71,7 +71,7 @@ services:
 
 networks:
   bodaboda-network:
-    driver: bridge
+    external: true
 
 volumes:
   grafana_data:

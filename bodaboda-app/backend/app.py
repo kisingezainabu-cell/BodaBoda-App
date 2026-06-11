@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 import os
 from functools import wraps
 import math
+import json
+import paho.mqtt.client as mqtt
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -389,6 +391,22 @@ def request_ride():
     # Find nearby drivers
     nearby_drivers = find_nearest_drivers(data['pickup_lat'], data['pickup_lng'])
     
+    # Publish to MQTT
+    try:
+        client = mqtt.Client()
+        client.connect("localhost", 1883, 60)
+        client.publish("ride/requests", json.dumps({
+            "ride_id": ride_request.id,
+            "status": ride_request.ride_status,
+            "pickup": ride_request.pickup_address,
+            "destination": ride_request.dropoff_address,
+            "pickup_lat": float(ride_request.pickup_location_lat),
+            "pickup_lng": float(ride_request.pickup_location_lng)
+        }))
+        client.disconnect()
+    except Exception as e:
+        print(f"Failed to publish to MQTT: {e}")
+    
     return jsonify({
         'message': 'Ride request created successfully',
         'ride_request': {
@@ -536,4 +554,4 @@ def internal_error(error):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=True)

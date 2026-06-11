@@ -41,11 +41,29 @@ services:
       - bodaboda-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - /app/node_modules
     ports:
-      - "8080:80"
+      - "3001:3000"
     depends_on:
       - backend
+    networks:
+      - bodaboda-network
+
+  mqtt:
+    image: eclipse-mosquitto
+    container_name: bodaboda-mqtt
+    ports:
+      - "1883:1883"
+      - "9002:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
     networks:
       - bodaboda-network
 

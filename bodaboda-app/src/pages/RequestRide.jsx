@@ -17,6 +17,15 @@ const RequestRide = () => {
   const [selectedDriverId, setSelectedDriverId] = useState(null);
   const { user } = useAuth();
 
+  const fetchNearbyDrivers = async () => {
+    try {
+      const drivers = await api.getOnlineDrivers();
+      setNearbyDrivers(drivers);
+    } catch (err) {
+      console.error("Failed to fetch drivers", err);
+    }
+  };
+
   useEffect(() => {
     fetchNearbyDrivers();
     const interval = setInterval(fetchNearbyDrivers, 15000);
@@ -41,15 +50,6 @@ const RequestRide = () => {
     }
     return () => clearInterval(interval);
   }, [status, activeRide]);
-
-  const fetchNearbyDrivers = async () => {
-    try {
-      const drivers = await api.getOnlineDrivers();
-      setNearbyDrivers(drivers);
-    } catch (err) {
-      console.error("Failed to fetch drivers", err);
-    }
-  };
 
   const handleCalculatePrice = () => {
     if (!formData.pickup || !formData.destination) return;
