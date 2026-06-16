@@ -1,9 +1,14 @@
 from rest_framework import status, permissions, generics
+from django.db import transaction
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Ride
 from .serializers import RideSerializer
+<<<<<<< HEAD
 from .mqtt import publish_message
+=======
+from messaging import publish_ride_request, publish_ride_status
+>>>>>>> 3fe3801a3adf1268f62f4700a740de9abd8e7976
 
 class RideRequestView(generics.CreateAPIView):
     serializer_class = RideSerializer
@@ -45,6 +50,7 @@ class RideRequestView(generics.CreateAPIView):
         else:
             ride = serializer.save(rider=rider, status='requested', guest_name=guest_name, guest_phone=guest_phone, pickup_lat=p_lat, pickup_lng=p_lng, destination_lat=d_lat, destination_lng=d_lng)
 
+<<<<<<< HEAD
         # Publish MQTT message
         publish_message("ride/requests", {
             "ride_id": ride.id,
@@ -58,6 +64,9 @@ class RideRequestView(generics.CreateAPIView):
             "destination_lat": ride.destination_lat,
             "destination_lng": ride.destination_lng,
         })
+=======
+        transaction.on_commit(lambda ride=ride: publish_ride_request(ride))
+>>>>>>> 3fe3801a3adf1268f62f4700a740de9abd8e7976
 
 class AvailableRidesView(generics.ListAPIView):
     serializer_class = RideSerializer
@@ -86,6 +95,7 @@ class RideAcceptView(APIView):
         ride.driver = request.user
         ride.status = 'accepted'
         ride.save()
+        transaction.on_commit(lambda ride=ride: publish_ride_status(ride))
         
         return Response(RideSerializer(ride).data)
 
@@ -103,6 +113,7 @@ class RideRejectView(APIView):
 
         ride.status = 'cancelled'
         ride.save()
+        transaction.on_commit(lambda ride=ride: publish_ride_status(ride))
         
         return Response(RideSerializer(ride).data)
 
@@ -118,6 +129,7 @@ class RideDetailView(generics.RetrieveUpdateAPIView):
     def perform_update(self, serializer):
         ride = self.get_object()
         user = self.request.user
+        previous_status = ride.status
         
         # Permission logic:
         # 1. Driver can update if assigned (requested) or accepted
@@ -127,7 +139,9 @@ class RideDetailView(generics.RetrieveUpdateAPIView):
         is_creator = ride.rider == user
         
         if is_assigned_driver or is_creator or user.is_superuser:
-            serializer.save()
+            updated_ride = serializer.save()
+            if updated_ride.status != previous_status:
+                transaction.on_commit(lambda ride=updated_ride: publish_ride_status(ride))
         else:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to update this ride.")

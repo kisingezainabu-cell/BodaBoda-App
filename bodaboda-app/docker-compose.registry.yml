@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bodaboda_db}
+      POSTGRES_USER: ${DB_USER:-bodaboda}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+    volumes:
+      - postgres_registry_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bodaboda} -d ${DB_NAME:-bodaboda_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:-demo}/bodaboda-backend:${IMAGE_TAG:-latest}
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-bodaboda_db}
+      DB_USER: ${DB_USER:-bodaboda}
+      DB_PASSWORD: ${DB_PASSWORD:-password123}
+      DEBUG: ${DEBUG:-True}
+      SECRET_KEY: ${SECRET_KEY:-django-insecure-bodaboda-app-key-123456789}
+      MQTT_ENABLED: ${MQTT_ENABLED:-True}
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST:-mqtt}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT:-1883}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-bodaboda}
+  frontend:
+    image: ${DOCKERHUB_USERNAME:-demo}/bodaboda-frontend:${IMAGE_TAG:-latest}
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  postgres_registry_data:

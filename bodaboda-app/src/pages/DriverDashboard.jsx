@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import api from '../api';
 import MapComponent from '../components/MapComponent';
+import { connectRealtime } from '../realtime';
 import { 
   Bike, 
   MapPin, 
@@ -33,12 +34,77 @@ const DriverDashboard = () => {
   const [isOnline, setIsOnline] = useState(user?.is_online || false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [realtimeState, setRealtimeState] = useState('connecting');
+
+  const addNotification = (message, type = 'info') => {
+    setNotifications(prev => [{
+      id: Date.now() + Math.random(),
+      message,
+      type,
+    }, ...prev].slice(0, 8));
+  };
+
+  const upsertAvailableRide = (ride) => {
+    setAvailableRides(prev => {
+      const existingIndex = prev.findIndex(item => item.id === ride.id);
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], ...ride };
+        return next;
+      }
+      return [ride, ...prev];
+    });
+  };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [isOnline]);
+
+  useEffect(() => {
+    if (!user || user.user_type !== 'driver') {
+      return undefined;
+    }
+
+    return connectRealtime({
+      user,
+      onConnectionChange: setRealtimeState,
+      onRideRequest: (ride) => {
+        const isTargetDriver = !ride.driver_id || ride.driver_id === user.id;
+        if (!isOnline || activeRide || !isTargetDriver || ride.status !== 'requested') {
+          return;
+        }
+
+        upsertAvailableRide(ride);
+        addNotification(
+          `New Request: ${ride.pickup_location} to ${ride.destination_location}`,
+          'new_ride'
+        );
+      },
+      onRideStatus: (rideUpdate) => {
+        setAvailableRides(prev => prev.filter(ride => {
+          if (ride.id !== rideUpdate.ride_id) {
+            return true;
+          }
+          return rideUpdate.status === 'requested';
+        }));
+
+        if (activeRide && activeRide.id === rideUpdate.ride_id) {
+          if (rideUpdate.status === 'completed' || rideUpdate.status === 'cancelled') {
+            setActiveRide(null);
+            fetchData();
+          } else {
+            setActiveRide(prev => prev ? { ...prev, status: rideUpdate.status, updated_at: rideUpdate.updated_at } : prev);
+          }
+        }
+
+        if (rideUpdate.driver_id === user.id) {
+          addNotification(`Ride ${rideUpdate.status}`, rideUpdate.status === 'accepted' ? 'success' : 'info');
+        }
+      },
+    });
+  }, [user, isOnline, activeRide]);
 
   const fetchData = async () => {
     try {
@@ -48,16 +114,12 @@ const DriverDashboard = () => {
         
         if (rides.length > availableRides.length) {
             const newRide = rides[0];
-            setNotifications(prev => [{
-                id: Date.now(),
-                message: `New Request: ${newRide.pickup_location} to ${newRide.destination_location}`,
-                type: 'new_ride'
-            }, ...prev]);
+            addNotification(`New Request: ${newRide.pickup_location} to ${newRide.destination_location}`, 'new_ride');
         }
       }
       
       const historyData = await api.getDriverHistory();
-      setHistory(historyData);
+      setHistory(historyData.rides || []);
       setLoading(false);
     } catch (err) {
       console.error("Failed to fetch data", err);
@@ -80,11 +142,7 @@ const DriverDashboard = () => {
       const ride = await api.acceptRide(rideId);
       setActiveRide(ride);
       setAvailableRides([]);
-      setNotifications(prev => [{
-          id: Date.now(),
-          message: "Trip Accepted! Navigate to pickup.",
-          type: 'success'
-      }, ...prev]);
+      addNotification("Trip Accepted! Navigate to pickup.", 'success');
     } catch (err) {
       alert(err.message);
     }
@@ -94,11 +152,7 @@ const DriverDashboard = () => {
     try {
       await api.rejectRide(rideId);
       setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-      setNotifications(prev => [{
-          id: Date.now(),
-          message: "Request declined.",
-          type: 'info'
-      }, ...prev]);
+      addNotification("Request declined.", 'info');
     } catch (err) {
       console.error("Reject error:", err);
       alert("Failed to reject request: " + err.message);
@@ -254,11 +308,20 @@ const DriverDashboard = () => {
                                 {isOnline ? 'Live in Dodoma' : 'Tracking Offline'}
                             </p>
                         </div>
-                        {availableRides.length > 0 && (
-                            <div className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-full shadow-lg">
-                                {availableRides.length} REQUESTS
+                        <div className="flex items-center gap-2">
+                            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-lg ${
+                                realtimeState === 'connected'
+                                  ? 'bg-sky-500 text-white'
+                                  : 'bg-slate-700 text-slate-200'
+                              }`}>
+                                MQTT {realtimeState}
                             </div>
-                        )}
+                            {availableRides.length > 0 && (
+                                <div className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-full shadow-lg">
+                                    {availableRides.length} REQUESTS
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

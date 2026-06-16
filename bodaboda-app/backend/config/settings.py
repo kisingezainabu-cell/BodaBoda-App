@@ -67,16 +67,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'bodaboda_db'),
-        'USER': os.environ.get('DB_USER', 'bodaboda'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'password123'),
-        'HOST': os.environ.get('DB_HOST', 'db'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+if os.environ.get('DJANGO_USE_SQLITE', 'False') == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'bodaboda_db'),
+            'USER': os.environ.get('DB_USER', 'bodaboda'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'password123'),
+            'HOST': os.environ.get('DB_HOST', 'db'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -124,3 +132,11 @@ SIMPLE_JWT = {
 
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = True # In production, restrict this
+
+# MQTT Settings
+MQTT_ENABLED = os.environ.get('MQTT_ENABLED', 'True') == 'True'
+MQTT_BROKER_HOST = os.environ.get('MQTT_BROKER_HOST', 'mqtt')
+MQTT_BROKER_PORT = int(os.environ.get('MQTT_BROKER_PORT', '1883'))
+MQTT_TOPIC_PREFIX = os.environ.get('MQTT_TOPIC_PREFIX', 'bodaboda')
+MQTT_QOS = int(os.environ.get('MQTT_QOS', '1'))
+MQTT_CLIENT_ID_PREFIX = os.environ.get('MQTT_CLIENT_ID_PREFIX', 'bodaboda-backend')

@@ -6,4 +6,8 @@ psycopg2-binary
 python-dotenv
 drf-spectacular
 django-prometheus
+<<<<<<< HEAD
 paho-mqtt
+=======
+paho-mqtt>=2.1,<3.0
+>>>>>>> 3fe3801a3adf1268f62f4700a740de9abd8e7976
